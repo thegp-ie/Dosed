@@ -1,0 +1,1497 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, Thermometer, Droplet, Activity, User, Trash2, Weight, Clock, TrendingUp, Download, Bell, AlertCircle, Pill } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+// Common symptoms for tracking
+const COMMON_SYMPTOMS = [
+  'Cough', 'Runny nose', 'Congestion', 'Sore throat', 'Earache',
+  'Headache', 'Vomiting', 'Diarrhea', 'Rash', 'Difficulty breathing',
+  'Wheezing', 'Lethargy', 'Poor feeding', 'Irritability', 'Seizure'
+];
+
+// Common medicines available in Ireland/UK with generic names
+const MEDICINES = [
+  // Antipyretics/Analgesics
+  { 
+    name: 'Calpol Infant (120mg/5ml)',
+    generic: 'paracetamol',
+    concentration: '120mg/5ml',
+    category: 'Antipyretic/Analgesic',
+    dosageGuide: [
+      { minWeight: 4, maxWeight: 8, dose: 2.5, ageGuide: '2-3 months' },
+      { minWeight: 8, maxWeight: 10, dose: 5, ageGuide: '3-6 months' },
+      { minWeight: 10, maxWeight: 13, dose: 7.5, ageGuide: '6-24 months' },
+      { minWeight: 13, maxWeight: 15, dose: 10, ageGuide: '2-4 years' },
+      { minWeight: 15, maxWeight: 21, dose: 10, ageGuide: '4-6 years' },
+      { minWeight: 21, maxWeight: 27, dose: 15, ageGuide: '6-8 years' },
+      { minWeight: 27, maxWeight: 33, dose: 15, ageGuide: '8-10 years' },
+      { minWeight: 33, maxWeight: 43, dose: 20, ageGuide: '10-12 years' }
+    ]
+  },
+  { 
+    name: 'Calpol Six Plus (250mg/5ml)',
+    generic: 'paracetamol',
+    concentration: '250mg/5ml',
+    category: 'Antipyretic/Analgesic',
+    dosageGuide: [
+      { minWeight: 21, maxWeight: 27, dose: 5, ageGuide: '6-8 years' },
+      { minWeight: 27, maxWeight: 33, dose: 7.5, ageGuide: '8-10 years' },
+      { minWeight: 33, maxWeight: 43, dose: 10, ageGuide: '10-12 years' }
+    ]
+  },
+  { 
+    name: 'Nurofen for Children (100mg/5ml)',
+    generic: 'ibuprofen',
+    concentration: '100mg/5ml',
+    category: 'Antipyretic/Analgesic',
+    dosageGuide: [
+      { minWeight: 7, maxWeight: 9, dose: 2.5, ageGuide: '3-6 months' },
+      { minWeight: 9, maxWeight: 11, dose: 2.5, ageGuide: '6-12 months' },
+      { minWeight: 11, maxWeight: 16, dose: 5, ageGuide: '1-3 years' },
+      { minWeight: 16, maxWeight: 21, dose: 7.5, ageGuide: '4-6 years' },
+      { minWeight: 21, maxWeight: 27, dose: 10, ageGuide: '7-9 years' },
+      { minWeight: 27, maxWeight: 40, dose: 15, ageGuide: '10-12 years' }
+    ]
+  },
+  { 
+    name: 'Disprol (120mg/5ml)',
+    generic: 'paracetamol',
+    concentration: '120mg/5ml',
+    category: 'Antipyretic/Analgesic',
+    dosageGuide: [
+      { minWeight: 4, maxWeight: 8, dose: 2.5, ageGuide: '2-3 months' },
+      { minWeight: 8, maxWeight: 10, dose: 5, ageGuide: '3-6 months' },
+      { minWeight: 10, maxWeight: 13, dose: 7.5, ageGuide: '6-24 months' },
+      { minWeight: 13, maxWeight: 15, dose: 10, ageGuide: '2-4 years' },
+      { minWeight: 15, maxWeight: 21, dose: 10, ageGuide: '4-6 years' }
+    ]
+  },
+  
+  // Antibiotics
+  { 
+    name: 'Pinamox (125mg/5ml)',
+    generic: 'amoxicillin',
+    concentration: '125mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 4, maxWeight: 8, dose: 2.5, ageGuide: '1-11 months' },
+      { minWeight: 8, maxWeight: 16, dose: 5, ageGuide: '1-4 years' },
+      { minWeight: 16, maxWeight: 35, dose: 10, ageGuide: '5-11 years' },
+      { minWeight: 35, maxWeight: 70, dose: 10, ageGuide: '12-17 years' }
+    ]
+  },
+  { 
+    name: 'Pinamox (250mg/5ml)',
+    generic: 'amoxicillin',
+    concentration: '250mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 8, maxWeight: 16, dose: 2.5, ageGuide: '1-4 years' },
+      { minWeight: 16, maxWeight: 35, dose: 5, ageGuide: '5-11 years' },
+      { minWeight: 35, maxWeight: 70, dose: 5, ageGuide: '12-17 years' }
+    ]
+  },
+  { 
+    name: 'Phenoxymethylpenicillin (125mg/5ml)',
+    generic: 'penicillin V',
+    concentration: '125mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 4, maxWeight: 8, dose: 2.5, ageGuide: '1-11 months' },
+      { minWeight: 8, maxWeight: 18, dose: 5, ageGuide: '1-5 years' }
+    ]
+  },
+  { 
+    name: 'Phenoxymethylpenicillin (250mg/5ml)',
+    generic: 'penicillin V',
+    concentration: '250mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 18, maxWeight: 39, dose: 5, ageGuide: '6-11 years' },
+      { minWeight: 39, maxWeight: 70, dose: 10, ageGuide: '12+ years' }
+    ]
+  },
+  { 
+    name: 'Clarithromycin (125mg/5ml)',
+    generic: 'clarithromycin',
+    concentration: '125mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 8, maxWeight: 11, dose: 2.5, ageGuide: '1-2 years' },
+      { minWeight: 11, maxWeight: 21, dose: 5, ageGuide: '3-6 years' },
+      { minWeight: 21, maxWeight: 32, dose: 7.5, ageGuide: '7-9 years' }
+    ]
+  },
+  { 
+    name: 'Clarithromycin (250mg/5ml)',
+    generic: 'clarithromycin',
+    concentration: '250mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 32, maxWeight: 70, dose: 5, ageGuide: '10+ years' }
+    ]
+  },
+  { 
+    name: 'Trimethoprim (50mg/5ml)',
+    generic: 'trimethoprim',
+    concentration: '50mg/5ml',
+    category: 'Antibiotic',
+    dosageGuide: [
+      { minWeight: 5, maxWeight: 7, dose: 2.5, ageGuide: '6 weeks-5 months' },
+      { minWeight: 7, maxWeight: 14, dose: 5, ageGuide: '6 months-3 years' },
+      { minWeight: 14, maxWeight: 23, dose: 7.5, ageGuide: '4-7 years' },
+      { minWeight: 23, maxWeight: 39, dose: 12.5, ageGuide: '8-12 years' }
+    ]
+  },
+  
+  // Asthma/Respiratory
+  {
+    name: 'Ventolin Inhaler (100mcg/puff)',
+    generic: 'salbutamol',
+    category: 'Asthma - Reliever',
+    unit: 'puffs',
+    dosageGuide: [
+      { minWeight: 0, maxWeight: 100, dose: 1, ageGuide: 'All ages', notes: '1-2 puffs as needed' }
+    ]
+  },
+  {
+    name: 'Clenil Modulite (Brown Inhaler)',
+    generic: 'beclometasone',
+    category: 'Asthma - Preventer',
+    unit: 'puffs',
+    dosageGuide: [
+      { minWeight: 0, maxWeight: 100, dose: 2, ageGuide: 'All ages', notes: '2 puffs twice daily' }
+    ]
+  },
+  {
+    name: 'Flixotide Inhaler',
+    generic: 'fluticasone',
+    category: 'Asthma - Preventer',
+    unit: 'puffs',
+    dosageGuide: [
+      { minWeight: 0, maxWeight: 100, dose: 2, ageGuide: 'All ages', notes: 'As prescribed' }
+    ]
+  },
+  {
+    name: 'Singulair (Montelukast) 4mg',
+    generic: 'montelukast',
+    category: 'Asthma - Preventer',
+    unit: 'tablet',
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 30, dose: 1, ageGuide: '2-5 years', notes: 'Once daily at bedtime' }
+    ]
+  },
+  {
+    name: 'Singulair (Montelukast) 5mg',
+    generic: 'montelukast',
+    category: 'Asthma - Preventer',
+    unit: 'tablet',
+    dosageGuide: [
+      { minWeight: 15, maxWeight: 40, dose: 1, ageGuide: '6-14 years', notes: 'Once daily at bedtime' }
+    ]
+  },
+  {
+    name: 'Pulmicort Respules',
+    generic: 'budesonide',
+    category: 'Asthma - Preventer',
+    unit: 'respule',
+    dosageGuide: [
+      { minWeight: 0, maxWeight: 100, dose: 1, ageGuide: 'All ages', notes: 'Via nebuliser as prescribed' }
+    ]
+  },
+  {
+    name: 'Prednisolone 5mg',
+    generic: 'prednisolone',
+    category: 'Steroid',
+    unit: 'tablet',
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 100, dose: 1, ageGuide: 'All ages', notes: 'As prescribed, usually 1-2mg/kg' }
+    ]
+  },
+  
+  // Antihistamines
+  {
+    name: 'Piriton Syrup',
+    generic: 'chlorphenamine',
+    concentration: '2mg/5ml',
+    category: 'Antihistamine',
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 20, dose: 2.5, ageGuide: '1-2 years' },
+      { minWeight: 20, maxWeight: 30, dose: 2.5, ageGuide: '2-6 years' },
+      { minWeight: 30, maxWeight: 45, dose: 5, ageGuide: '6-12 years' }
+    ]
+  },
+  {
+    name: 'Zirtek (Cetirizine) 5mg/5ml',
+    generic: 'cetirizine',
+    concentration: '5mg/5ml',
+    category: 'Antihistamine',
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 30, dose: 2.5, ageGuide: '2-6 years', notes: 'Once daily' },
+      { minWeight: 30, maxWeight: 70, dose: 5, ageGuide: '6+ years', notes: 'Once daily' }
+    ]
+  }
+];
+
+export default function FeverTrackerApp() {
+  const [children, setChildren] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [showAddChild, setShowAddChild] = useState(false);
+  const [showAddRecord, setShowAddRecord] = useState(false);
+  const [showAddPrescription, setShowAddPrescription] = useState(false);
+  const [showEditChild, setShowEditChild] = useState(false);
+  const [editingChild, setEditingChild] = useState(null);
+  const [selectedChild, setSelectedChild] = useState(null);
+  const [showTrends, setShowTrends] = useState(false);
+  const [activeReminders, setActiveReminders] = useState([]);
+
+  useEffect(() => {
+    loadData();
+    checkReminders();
+    const interval = setInterval(checkReminders, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    saveData();
+  }, [children, records, prescriptions]);
+
+  const loadData = async () => {
+    try {
+      const childrenData = await window.storage.get('children');
+      const recordsData = await window.storage.get('records');
+      const prescriptionsData = await window.storage.get('prescriptions');
+      
+      if (childrenData) setChildren(JSON.parse(childrenData.value));
+      if (recordsData) setRecords(JSON.parse(recordsData.value));
+      if (prescriptionsData) setPrescriptions(JSON.parse(prescriptionsData.value));
+    } catch (error) {
+      console.log('No existing data found');
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      await window.storage.set('children', JSON.stringify(children));
+      await window.storage.set('records', JSON.stringify(records));
+      await window.storage.set('prescriptions', JSON.stringify(prescriptions));
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
+  };
+
+  const checkReminders = () => {
+    const now = new Date();
+    const reminders = [];
+    
+    prescriptions.forEach(prescription => {
+      if (prescription.nextDose) {
+        const nextDoseTime = new Date(prescription.nextDose);
+        const timeDiff = nextDoseTime - now;
+        
+        if (timeDiff > 0 && timeDiff < 15 * 60 * 1000) {
+          const child = children.find(c => c.id === prescription.childId);
+          reminders.push({
+            ...prescription,
+            childName: child?.name || 'Unknown',
+            minutesUntil: Math.floor(timeDiff / 60000)
+          });
+        }
+      }
+    });
+    
+    setActiveReminders(reminders);
+  };
+
+  const addChild = (childData) => {
+    const newChild = {
+      ...childData,
+      id: Date.now().toString()
+    };
+    setChildren([...children, newChild]);
+    setShowAddChild(false);
+  };
+
+  const updateChild = (childData) => {
+    setChildren(children.map(c => c.id === childData.id ? childData : c));
+    setShowEditChild(false);
+    setEditingChild(null);
+  };
+
+  const deleteChild = (id) => {
+    setChildren(children.filter(c => c.id !== id));
+    setRecords(records.filter(r => r.childId !== id));
+    setPrescriptions(prescriptions.filter(p => p.childId !== id));
+  };
+
+  const addRecord = (record) => {
+    const newRecord = {
+      ...record,
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString()
+    };
+    setRecords([newRecord, ...records]);
+    setShowAddRecord(false);
+    
+    if (record.prescriptionId) {
+      updateNextDose(record.prescriptionId);
+    }
+  };
+
+  const addPrescription = (prescription) => {
+    const newPrescription = {
+      ...prescription,
+      id: Date.now().toString(),
+      startDate: new Date().toISOString(),
+      nextDose: calculateNextDose(prescription.frequency)
+    };
+    setPrescriptions([...prescriptions, newPrescription]);
+    setShowAddPrescription(false);
+  };
+
+  const calculateNextDose = (frequency) => {
+    const now = new Date();
+    const hoursToAdd = frequency === 'TDS' ? 8 : frequency === 'BD' ? 12 : frequency === 'QDS' ? 6 : 24;
+    now.setHours(now.getHours() + hoursToAdd);
+    return now.toISOString();
+  };
+
+  const updateNextDose = (prescriptionId) => {
+    setPrescriptions(prescriptions.map(p => {
+      if (p.id === prescriptionId) {
+        return {
+          ...p,
+          nextDose: calculateNextDose(p.frequency)
+        };
+      }
+      return p;
+    }));
+  };
+
+  const deleteRecord = (id) => {
+    setRecords(records.filter(r => r.id !== id));
+  };
+
+  const deletePrescription = (id) => {
+    setPrescriptions(prescriptions.filter(p => p.id !== id));
+  };
+
+  const getChildRecords = (childId) => {
+    return records.filter(r => r.childId === childId);
+  };
+
+  const getChildPrescriptions = (childId) => {
+    return prescriptions.filter(p => p.childId === childId);
+  };
+
+  const formatDateTime = (isoString) => {
+    const date = new Date(isoString);
+    return date.toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const exportPDF = (childId) => {
+    const child = children.find(c => c.id === childId);
+    const childRecords = getChildRecords(childId).sort((a, b) => 
+      new Date(a.timestamp) - new Date(b.timestamp)
+    );
+    const childPrescriptions = getChildPrescriptions(childId);
+
+    let content = `CHILD FEVER TRACKER - MEDICAL SUMMARY\n`;
+    content += `Generated: ${new Date().toLocaleString('en-GB')}\n\n`;
+    content += `PATIENT INFORMATION\n`;
+    content += `Name: ${child.name}\n`;
+    content += `Age: ${child.age}\n`;
+    if (child.weight) content += `Weight: ${child.weight} kg\n`;
+    content += `\n`;
+
+    if (child.conditions && child.conditions.length > 0) {
+      content += `MEDICAL CONDITIONS\n`;
+      child.conditions.forEach(c => content += `- ${c}\n`);
+      content += `\n`;
+    }
+
+    if (child.allergies && child.allergies.length > 0) {
+      content += `ALLERGIES\n`;
+      child.allergies.forEach(a => content += `- ${a}\n`);
+      content += `\n`;
+    }
+
+    if (child.regularMedications && child.regularMedications.length > 0) {
+      content += `REGULAR MEDICATIONS\n`;
+      child.regularMedications.forEach(m => content += `- ${m}\n`);
+      content += `\n`;
+    }
+
+    if (childPrescriptions.length > 0) {
+      content += `CURRENT PRESCRIPTIONS\n`;
+      childPrescriptions.forEach(p => {
+        content += `- ${p.medication} (${p.medicationGeneric})\n`;
+        content += `  Dose: ${p.dose}${p.unit || 'ml'} ${p.frequency}\n`;
+        content += `  Duration: ${p.duration} days\n`;
+        content += `  Started: ${formatDateTime(p.startDate)}\n\n`;
+      });
+    }
+
+    content += `VITAL SIGNS & SYMPTOMS RECORDS\n`;
+    content += `(Most recent first)\n\n`;
+    
+    [...childRecords].reverse().forEach(record => {
+      content += `${formatDateTime(record.timestamp)}\n`;
+      content += `  Temperature: ${record.temperature}°C\n`;
+      if (record.respRate) content += `  Respiratory Rate: ${record.respRate}/min\n`;
+      if (record.heartRate) content += `  Heart Rate: ${record.heartRate} bpm\n`;
+      if (record.symptoms && record.symptoms.length > 0) {
+        content += `  Symptoms: ${record.symptoms.join(', ')}\n`;
+      }
+      if (record.medication) {
+        content += `  Medication: ${record.medication}`;
+        if (record.medicationGeneric) content += ` (${record.medicationGeneric})`;
+        content += `\n`;
+        if (record.dose) content += `  Dose Given: ${record.dose}${record.unit || 'ml'}\n`;
+      }
+      if (record.notes) content += `  Notes: ${record.notes}\n`;
+      content += `\n`;
+    });
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${child.name.replace(/\s+/g, '_')}_medical_summary_${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <h1 className="text-3xl font-bold text-indigo-900 flex items-center gap-2">
+            <Thermometer className="text-red-500" />
+            Child Health Tracker
+          </h1>
+          <p className="text-gray-600 mt-2">Monitor temperatures, medications, symptoms, and vital signs</p>
+        </div>
+
+        {activeReminders.length > 0 && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-lg">
+            <div className="flex items-start">
+              <Bell className="text-yellow-600 mr-3 mt-1" size={20} />
+              <div>
+                <h3 className="font-semibold text-yellow-800">Medication Reminders</h3>
+                {activeReminders.map((reminder, idx) => (
+                  <p key={idx} className="text-sm text-yellow-700 mt-1">
+                    {reminder.childName}: {reminder.medication} due in {reminder.minutesUntil} minutes
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-800">Children</h2>
+            <button
+              onClick={() => setShowAddChild(true)}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700"
+            >
+              <Plus size={20} />
+              Add Child
+            </button>
+          </div>
+
+          {children.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No children added yet. Add a child to start tracking.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {children.map(child => (
+                <div key={child.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-start gap-2">
+                      <User className="text-indigo-600 mt-1" size={24} />
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">{child.name}</h3>
+                        <p className="text-sm text-gray-600">Age: {child.age}</p>
+                        {child.weight && <p className="text-sm text-gray-600">Weight: {child.weight} kg</p>}
+                        {child.conditions && child.conditions.length > 0 && (
+                          <div className="mt-1">
+                            <p className="text-xs text-gray-500">Conditions: {child.conditions.join(', ')}</p>
+                          </div>
+                        )}
+                        {child.allergies && child.allergies.length > 0 && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <AlertCircle size={12} className="text-red-500" />
+                            <p className="text-xs text-red-600">Allergies: {child.allergies.join(', ')}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => { setEditingChild(child); setShowEditChild(true); }}
+                        className="text-blue-500 hover:text-blue-700 p-1"
+                      >
+                        <Pill size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteChild(child.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => setSelectedChild(child)}
+                      className="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded hover:bg-blue-200 text-sm"
+                    >
+                      Records ({getChildRecords(child.id).length})
+                    </button>
+                    <button
+                      onClick={() => { setSelectedChild(child); setShowTrends(true); }}
+                      className="flex-1 bg-green-100 text-green-700 px-3 py-2 rounded hover:bg-green-200 text-sm flex items-center justify-center gap-1"
+                    >
+                      <TrendingUp size={16} />
+                      Trends
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {children.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <button
+              onClick={() => setShowAddRecord(true)}
+              className="bg-green-600 text-white px-6 py-4 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700 font-semibold shadow-lg"
+            >
+              <Plus size={24} />
+              Add New Record
+            </button>
+            <button
+              onClick={() => setShowAddPrescription(true)}
+              className="bg-purple-600 text-white px-6 py-4 rounded-lg flex items-center justify-center gap-2 hover:bg-purple-700 font-semibold shadow-lg"
+            >
+              <Clock size={24} />
+              Add Prescription
+            </button>
+          </div>
+        )}
+
+        {selectedChild && !showTrends && (
+          <RecordsView
+            child={selectedChild}
+            records={getChildRecords(selectedChild.id)}
+            prescriptions={getChildPrescriptions(selectedChild.id)}
+            onClose={() => setSelectedChild(null)}
+            onDeleteRecord={deleteRecord}
+            onDeletePrescription={deletePrescription}
+            onExport={() => exportPDF(selectedChild.id)}
+            formatDateTime={formatDateTime}
+          />
+        )}
+
+        {selectedChild && showTrends && (
+          <TrendsView 
+            child={selectedChild}
+            records={getChildRecords(selectedChild.id)}
+            onClose={() => { setShowTrends(false); setSelectedChild(null); }}
+          />
+        )}
+
+        {showAddChild && (
+          <Modal onClose={() => setShowAddChild(false)}>
+            <ChildForm 
+              onSave={addChild} 
+              onCancel={() => setShowAddChild(false)} 
+            />
+          </Modal>
+        )}
+
+        {showEditChild && editingChild && (
+          <Modal onClose={() => { setShowEditChild(false); setEditingChild(null); }}>
+            <ChildForm 
+              child={editingChild}
+              onSave={updateChild} 
+              onCancel={() => { setShowEditChild(false); setEditingChild(null); }} 
+            />
+          </Modal>
+        )}
+
+        {showAddRecord && (
+          <Modal onClose={() => setShowAddRecord(false)}>
+            <AddRecordForm 
+              children={children}
+              prescriptions={prescriptions}
+              onAdd={addRecord}
+              onCancel={() => setShowAddRecord(false)}
+            />
+          </Modal>
+        )}
+
+        {showAddPrescription && (
+          <Modal onClose={() => setShowAddPrescription(false)}>
+            <AddPrescriptionForm 
+              children={children}
+              onAdd={addPrescription}
+              onCancel={() => setShowAddPrescription(false)}
+            />
+          </Modal>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecordsView({ child, records, prescriptions, onClose, onDeleteRecord, onDeletePrescription, onExport, formatDateTime }) {
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-gray-800">
+          Records for {child.name}
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={onExport}
+            className="text-blue-600 hover:text-blue-800 px-3 py-2 bg-blue-50 rounded-lg flex items-center gap-2"
+          >
+            <Download size={18} />
+            Export
+          </button>
+          <button
+            onClick={onClose}
+            className="text-gray-600 hover:text-gray-800 px-3 py-2 bg-gray-100 rounded-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      {prescriptions.length > 0 && (
+        <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+          <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+            <Clock size={18} />
+            Active Prescriptions
+          </h3>
+          {prescriptions.map(prescription => (
+            <div key={prescription.id} className="mb-3 pb-3 border-b border-purple-200 last:border-0">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-medium text-purple-900">{prescription.medication}</div>
+                  <div className="text-sm text-purple-700">{prescription.medicationGeneric}</div>
+                  <div className="text-sm text-purple-600 mt-1">
+                    {prescription.dose}{prescription.unit || 'ml'} {prescription.frequency} for {prescription.duration} days
+                  </div>
+                  {prescription.nextDose && (
+                    <div className="text-xs text-purple-500 mt-1">
+                      Next dose: {formatDateTime(prescription.nextDose)}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => onDeletePrescription(prescription.id)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {records.length === 0 ? (
+        <p className="text-gray-500 text-center py-8">No records yet for this child.</p>
+      ) : (
+        <div className="space-y-4">
+          {records.map(record => (
+            <div key={record.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-3">
+                <div className="text-sm text-gray-600">{formatDateTime(record.timestamp)}</div>
+                <button
+                  onClick={() => onDeleteRecord(record.id)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <Thermometer className="text-red-500" size={20} />
+                  <div>
+                    <div className="text-xs text-gray-600">Temperature</div>
+                    <div className="font-semibold">{record.temperature}°C</div>
+                  </div>
+                </div>
+                
+                {record.heartRate && (
+                  <div className="flex items-center gap-2">
+                    <Activity className="text-pink-500" size={20} />
+                    <div>
+                      <div className="text-xs text-gray-600">Heart Rate</div>
+                      <div className="font-semibold">{record.heartRate} bpm</div>
+                    </div>
+                  </div>
+                )}
+                
+                {record.respRate && (
+                  <div className="flex items-center gap-2">
+                    <Activity className="text-green-500" size={20} />
+                    <div>
+                      <div className="text-xs text-gray-600">Resp Rate</div>
+                      <div className="font-semibold">{record.respRate}/min</div>
+                    </div>
+                  </div>
+                )}
+                
+                {record.medication && (
+                  <div className="flex items-center gap-2">
+                    <Droplet className="text-blue-500" size={20} />
+                    <div>
+                      <div className="text-xs text-gray-600">Medication</div>
+                      <div className="font-semibold text-sm">{record.medication}</div>
+                      {record.medicationGeneric && (
+                        <div className="text-xs text-gray-500">{record.medicationGeneric}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {record.dose && (
+                  <div className="flex items-center gap-2">
+                    <div className="text-purple-500 font-bold text-xl">{record.unit || 'ml'}</div>
+                    <div>
+                      <div className="text-xs text-gray-600">Dose</div>
+                      <div className="font-semibold">{record.dose} {record.unit || 'ml'}</div>
+                    </div>
+                  </div>
+                )}
+
+                {record.weightAtTime && (
+                  <div className="flex items-center gap-2">
+                    <Weight className="text-orange-500" size={20} />
+                    <div>
+                      <div className="text-xs text-gray-600">Weight</div>
+                      <div className="font-semibold">{record.weightAtTime} kg</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {record.symptoms && record.symptoms.length > 0 && (
+                <div className="mb-3 p-2 bg-yellow-50 rounded border border-yellow-200">
+                  <div className="text-xs text-yellow-700 font-medium mb-1">Symptoms:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {record.symptoms.map((symptom, idx) => (
+                      <span key={idx} className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        {symptom}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {record.notes && (
+                <div className="pt-3 border-t border-gray-200">
+                  <div className="text-xs text-gray-600 mb-1">Notes:</div>
+                  <div className="text-sm">{record.notes}</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrendsView({ child, records, onClose }) {
+  const sortedRecords = [...records].sort((a, b) => 
+    new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  const chartData = sortedRecords.map(r => ({
+    time: new Date(r.timestamp).toLocaleString('en-GB', { 
+      day: 'numeric', 
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    temperature: parseFloat(r.temperature),
+    heartRate: r.heartRate ? parseInt(r.heartRate) : null,
+    respRate: r.respRate ? parseInt(r.respRate) : null
+  }));
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold text-gray-800">
+          Trends for {child.name}
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-gray-600 hover:text-gray-800 px-4 py-2 bg-gray-100 rounded-lg"
+        >
+          Close
+        </button>
+      </div>
+
+      {chartData.length < 2 ? (
+        <p className="text-gray-500 text-center py-8">Need at least 2 records to show trends</p>
+      ) : (
+        <div className="space-y-8">
+          <div>
+            <h3 className="font-semibold text-gray-700 mb-4">Temperature (°C)</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                <YAxis domain={[35, 42]} />
+                <Tooltip />
+                <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {chartData.some(d => d.heartRate) && (
+            <div>
+              <h3 className="font-semibold text-gray-700 mb-4">Heart Rate (bpm)</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" tick={{ fontSize: 12}} />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="heartRate" stroke="#ec4899" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {chartData.some(d => d.respRate) && (
+            <div>
+              <h3 className="font-semibold text-gray-700 mb-4">Respiratory Rate (/min)</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="respRate" stroke="#10b981" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Modal({ children, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ChildForm({ child, onSave, onCancel }) {
+  const [name, setName] = useState(child?.name || '');
+  const [age, setAge] = useState(child?.age || '');
+  const [weight, setWeight] = useState(child?.weight || '');
+  const [conditions, setConditions] = useState(child?.conditions || []);
+  const [newCondition, setNewCondition] = useState('');
+  const [allergies, setAllergies] = useState(child?.allergies || []);
+  const [newAllergy, setNewAllergy] = useState('');
+  const [regularMedications, setRegularMedications] = useState(child?.regularMedications || []);
+  const [newMedication, setNewMedication] = useState('');
+
+  const handleSubmit = () => {
+    if (name && age) {
+      const childData = {
+        ...(child?.id && { id: child.id }),
+        name,
+        age,
+        weight: weight || null,
+        conditions,
+        allergies,
+        regularMedications
+      };
+      onSave(childData);
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <h3 className="text-xl font-bold mb-4">{child ? 'Edit' : 'Add'} Child</h3>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Age *</label>
+        <input
+          type="text"
+          value={age}
+          onChange={(e) => setAge(e.target.value)}
+          placeholder="e.g., 3 years, 18 months"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Weight (kg)</label>
+        <input
+          type="number"
+          step="0.1"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          placeholder="Optional"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Medical Conditions</label>
+        <div className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={newCondition}
+            onChange={(e) => setNewCondition(e.target.value)}
+            placeholder="e.g., Asthma"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            onClick={() => {
+              if (newCondition.trim()) {
+                setConditions([...conditions, newCondition.trim()]);
+                setNewCondition('');
+              }
+            }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            Add
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {conditions.map((condition, idx) => (
+            <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+              {condition}
+              <button onClick={() => setConditions(conditions.filter((_, i) => i !== idx))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Allergies</label>
+        <div className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={newAllergy}
+            onChange={(e) => setNewAllergy(e.target.value)}
+            placeholder="e.g., Penicillin"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          <button
+            onClick={() => {
+              if (newAllergy.trim()) {
+                setAllergies([...allergies, newAllergy.trim()]);
+                setNewAllergy('');
+              }
+            }}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            Add
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {allergies.map((allergy, idx) => (
+            <span key={idx} className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+              {allergy}
+              <button onClick={() => setAllergies(allergies.filter((_, i) => i !== idx))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Regular Medications</label>
+        <div className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={newMedication}
+            onChange={(e) => setNewMedication(e.target.value)}
+            placeholder="e.g., Ventolin 2 puffs twice daily"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+          <button
+            onClick={() => {
+              if (newMedication.trim()) {
+                setRegularMedications([...regularMedications, newMedication.trim()]);
+                setNewMedication('');
+              }
+            }}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+          >
+            Add
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {regularMedications.map((med, idx) => (
+            <span key={idx} className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+              {med}
+              <button onClick={() => setRegularMedications(regularMedications.filter((_, i) => i !== idx))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+      
+      <div className="flex gap-3">
+        <button
+          onClick={handleSubmit}
+          className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+        >
+          {child ? 'Update' : 'Add'} Child
+        </button>
+        <button
+          onClick={onCancel}
+          className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddPrescriptionForm({ children, onAdd, onCancel }) {
+  const [childId, setChildId] = useState('');
+  const [medication, setMedication] = useState('');
+  const [dose, setDose] = useState('');
+  const [frequency, setFrequency] = useState('TDS');
+  const [duration, setDuration] = useState('');
+
+  const selectedMedicine = MEDICINES.find(m => m.name === medication);
+  const unit = selectedMedicine?.unit || 'ml';
+
+  const handleSubmit = () => {
+    if (childId && medication && dose && frequency && duration) {
+      onAdd({
+        childId,
+        medication,
+        medicationGeneric: selectedMedicine?.generic || '',
+        dose,
+        unit,
+        frequency,
+        duration
+      });
+    }
+  };
+
+  const medicinesByCategory = MEDICINES.reduce((acc, med) => {
+    const cat = med.category || 'Other';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(med);
+    return acc;
+  }, {});
+
+  return (
+    <div className="p-6">
+      <h3 className="text-xl font-bold mb-4">Add Prescription</h3>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Child *</label>
+        <select
+          value={childId}
+          onChange={(e) => setChildId(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+        >
+          <option value="">Select a child</option>
+          {children.map(child => (
+            <option key={child.id} value={child.id}>
+              {child.name} ({child.age})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Medication *</label>
+        <select
+          value={medication}
+          onChange={(e) => setMedication(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+        >
+          <option value="">Select medication</option>
+          {Object.entries(medicinesByCategory).map(([category, meds]) => (
+            <optgroup key={category} label={category}>
+              {meds.map(med => (
+                <option key={med.name} value={med.name}>{med.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {selectedMedicine && (
+          <p className="text-xs text-gray-500 mt-1">Generic: {selectedMedicine.generic}</p>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Dose ({unit}) *</label>
+        <input
+          type="number"
+          step="0.1"
+          value={dose}
+          onChange={(e) => setDose(e.target.value)}
+          placeholder={`e.g., ${unit === 'puffs' ? '2' : '5.0'}`}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Frequency *</label>
+        <select
+          value={frequency}
+          onChange={(e) => setFrequency(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+        >
+          <option value="OD">Once Daily (OD)</option>
+          <option value="BD">Twice Daily (BD)</option>
+          <option value="TDS">Three Times Daily (TDS)</option>
+          <option value="QDS">Four Times Daily (QDS)</option>
+        </select>
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Duration (days) *</label>
+        <input
+          type="number"
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+          placeholder="e.g., 5 or 7"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+      </div>
+      
+      <div className="flex gap-3">
+        <button
+          onClick={handleSubmit}
+          className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+        >
+          Add Prescription
+        </button>
+        <button
+          onClick={onCancel}
+          className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddRecordForm({ children, prescriptions, onAdd, onCancel }) {
+  const [childId, setChildId] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [heartRate, setHeartRate] = useState('');
+  const [medication, setMedication] = useState('');
+  const [dose, setDose] = useState('');
+  const [respRate, setRespRate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [weightAtTime, setWeightAtTime] = useState('');
+  const [prescriptionId, setPrescriptionId] = useState('');
+  const [symptoms, setSymptoms] = useState([]);
+
+  const selectedChild = children.find(c => c.id === childId);
+  const selectedMedicine = MEDICINES.find(m => m.name === medication);
+  const childPrescriptions = prescriptions.filter(p => p.childId === childId);
+  const unit = selectedMedicine?.unit || 'ml';
+
+  const getRecommendedDose = () => {
+    if (!selectedMedicine || !selectedChild) return null;
+    
+    const weight = parseFloat(weightAtTime) || parseFloat(selectedChild.weight);
+    if (!weight && selectedMedicine.dosageGuide[0].minWeight > 0) return null;
+
+    const dosage = selectedMedicine.dosageGuide.find(
+      d => weight >= d.minWeight && weight <= d.maxWeight
+    );
+
+    return dosage || selectedMedicine.dosageGuide[0];
+  };
+
+  const handleMedicineChange = (medicineName) => {
+    setMedication(medicineName);
+    setDose('');
+  };
+
+  const handlePrescriptionSelect = (prescId) => {
+    setPrescriptionId(prescId);
+    const prescription = prescriptions.find(p => p.id === prescId);
+    if (prescription) {
+      setMedication(prescription.medication);
+      setDose(prescription.dose);
+    }
+  };
+
+  const applyRecommendedDose = () => {
+    const recommended = getRecommendedDose();
+    if (recommended) {
+      setDose(recommended.dose.toString());
+    }
+  };
+
+  const toggleSymptom = (symptom) => {
+    setSymptoms(prev => 
+      prev.includes(symptom) 
+        ? prev.filter(s => s !== symptom)
+        : [...prev, symptom]
+    );
+  };
+
+  const handleSubmit = () => {
+    if (childId && temperature) {
+      const medicineData = MEDICINES.find(m => m.name === medication);
+      onAdd({
+        childId,
+        temperature,
+        heartRate: heartRate || null,
+        medication: medication || null,
+        medicationGeneric: medicineData ? medicineData.generic : null,
+        dose: dose || null,
+        unit: medicineData?.unit || 'ml',
+        respRate: respRate || null,
+        notes: notes || null,
+        weightAtTime: weightAtTime || null,
+        prescriptionId: prescriptionId || null,
+        symptoms
+      });
+    }
+  };
+
+  const recommendedDose = getRecommendedDose();
+
+  const medicinesByCategory = MEDICINES.reduce((acc, med) => {
+    const cat = med.category || 'Other';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(med);
+    return acc;
+  }, {});
+
+  return (
+    <div className="p-6">
+      <h3 className="text-xl font-bold mb-4">Add Record</h3>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Child *</label>
+        <select
+          value={childId}
+          onChange={(e) => setChildId(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Select a child</option>
+          {children.map(child => (
+            <option key={child.id} value={child.id}>
+              {child.name} ({child.age}{child.weight ? `, ${child.weight}kg` : ''})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {childPrescriptions.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">From Prescription (optional)</label>
+          <select
+            value={prescriptionId}
+            onChange={(e) => handlePrescriptionSelect(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="">Select prescription or enter manually</option>
+            {childPrescriptions.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.medication} - {p.dose}{p.unit || 'ml'} {p.frequency}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Temperature (°C) *</label>
+        <input
+          type="number"
+          step="0.1"
+          value={temperature}
+          onChange={(e) => setTemperature(e.target.value)}
+          placeholder="e.g., 38.5"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Symptoms</label>
+        <div className="flex flex-wrap gap-2">
+          {COMMON_SYMPTOMS.map(symptom => (
+            <button
+              key={symptom}
+              onClick={() => toggleSymptom(symptom)}
+              className={`px-3 py-1 rounded-full text-sm ${
+                symptoms.includes(symptom)
+                  ? 'bg-yellow-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {symptom}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Heart Rate (bpm)</label>
+        <input
+          type="number"
+          value={heartRate}
+          onChange={(e) => setHeartRate(e.target.value)}
+          placeholder="e.g., 110"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Respiratory Rate (/min)</label>
+        <input
+          type="number"
+          value={respRate}
+          onChange={(e) => setRespRate(e.target.value)}
+          placeholder="e.g., 24"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Medication</label>
+        <select
+          value={medication}
+          onChange={(e) => handleMedicineChange(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          disabled={prescriptionId}
+        >
+          <option value="">Select medication</option>
+          {Object.entries(medicinesByCategory).map(([category, meds]) => (
+            <optgroup key={category} label={category}>
+              {meds.map(med => (
+                <option key={med.name} value={med.name}>{med.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {selectedMedicine && (
+          <p className="text-xs text-gray-500 mt-1">Generic: {selectedMedicine.generic}</p>
+        )}
+      </div>
+
+      {selectedChild && !selectedChild.weight && medication && !prescriptionId && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Weight at time of dose (kg)
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            value={weightAtTime}
+            onChange={(e) => setWeightAtTime(e.target.value)}
+            placeholder="For accurate dosage recommendation"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+      )}
+
+      {medication && recommendedDose && !prescriptionId && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="text-sm font-medium text-blue-900 mb-1">Recommended Dose:</div>
+          <div className="text-lg font-bold text-blue-700">{recommendedDose.dose} {unit}</div>
+          <div className="text-xs text-blue-600">
+            {recommendedDose.ageGuide && `For ${recommendedDose.ageGuide}`}
+            {recommendedDose.minWeight > 0 && ` (${recommendedDose.minWeight}-${recommendedDose.maxWeight}kg)`}
+            {recommendedDose.notes && <div className="mt-1">{recommendedDose.notes}</div>}
+          </div>
+          <button
+            onClick={applyRecommendedDose}
+            className="mt-2 text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+          >
+            Use This Dose
+          </button>
+        </div>
+      )}
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Dose Given ({unit})</label>
+        <input
+          type="number"
+          step="0.1"
+          value={dose}
+          onChange={(e) => setDose(e.target.value)}
+          placeholder={`e.g., ${unit === 'puffs' ? '2' : '5.0'}`}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          disabled={prescriptionId}
+        />
+      </div>
+      
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows="3"
+          placeholder="Any additional observations..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      
+      <div className="flex gap-3">
+        <button
+          onClick={handleSubmit}
+          className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+        >
+          Add Record
+        </button>
+        <button
+          onClick={onCancel}
+          className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
