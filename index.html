@@ -2,19 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#4F46E5">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Dosed">
-    <meta name="description" content="Dosed - Monitor child temperatures, medications, and vital signs">
-    
-    <title>Dosed - Child Health Tracker</title>
-    
+    <title>Dosed</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%234F46E5' width='180' height='180'/><text x='90' y='110' font-size='80' text-anchor='middle' fill='white'>🌡️</text></svg>">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌡️</text></svg>">
-    
     <style>
         * {
             margin: 0;
@@ -25,196 +16,365 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #EFF6FF 0%, #C7D2FE 100%);
             min-height: 100vh;
-            -webkit-font-smoothing: antialiased;
+            padding: 20px;
         }
-        #root {
-            min-height: 100vh;
-        }
-        .loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-size: 1.5rem;
-            color: #4F46E5;
-        }
-        .install-prompt {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            max-width: 400px;
+        .container {
+            max-width: 600px;
             margin: 0 auto;
+        }
+        .header {
             background: white;
-            padding: 1rem;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            display: none;
-            z-index: 1000;
-            animation: slideUp 0.3s ease;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-        .install-prompt.show {
-            display: block;
+        .header h1 {
+            font-size: 32px;
+            color: #4F46E5;
+            margin-bottom: 10px;
         }
-        @keyframes slideUp {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        .install-prompt h3 {
-            margin-bottom: 0.5rem;
-            color: #1F2937;
-        }
-        .install-prompt p {
-            margin-bottom: 1rem;
+        .header p {
             color: #6B7280;
-            font-size: 0.9rem;
         }
-        .install-buttons {
-            display: flex;
-            gap: 0.5rem;
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-        .install-buttons button {
-            flex: 1;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        .install-buttons .install-btn {
+        .btn {
             background: #4F46E5;
             color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
         }
-        .install-buttons .dismiss-btn {
+        .btn:hover {
+            background: #4338CA;
+        }
+        .btn-secondary {
             background: #E5E7EB;
             color: #374151;
         }
+        .btn-secondary:hover {
+            background: #D1D5DB;
+        }
+        .btn-danger {
+            background: #EF4444;
+            color: white;
+            padding: 8px 16px;
+            font-size: 14px;
+            width: auto;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #374151;
+        }
+        .child-item {
+            background: #F9FAFB;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .child-item h3 {
+            color: #1F2937;
+        }
+        .record-item {
+            background: #F9FAFB;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4F46E5;
+        }
+        .record-meta {
+            color: #6B7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .record-data {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .data-item {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .data-label {
+            font-size: 12px;
+            color: #6B7280;
+            margin-bottom: 3px;
+        }
+        .data-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1F2937;
+        }
+        .hidden {
+            display: none;
+        }
     </style>
-    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
-    <div id="installPrompt" class="install-prompt">
-        <h3>📱 Install App</h3>
-        <p>Add Dosed to your home screen for quick access!</p>
-        <div class="install-buttons">
-            <button class="install-btn" onclick="installApp()">Install</button>
-            <button class="dismiss-btn" onclick="dismissInstall()">Not Now</button>
+    <div class="container">
+        <div class="header">
+            <h1>🌡️ Dosed</h1>
+            <p>Child Health Tracker</p>
+        </div>
+
+        <!-- Children List View -->
+        <div id="childrenView" class="card">
+            <h2 style="margin-bottom: 20px;">Children</h2>
+            <div id="childrenList"></div>
+            <button class="btn" onclick="showAddChild()">+ Add Child</button>
+        </div>
+
+        <!-- Add Child View -->
+        <div id="addChildView" class="card hidden">
+            <h2 style="margin-bottom: 20px;">Add Child</h2>
+            <label>Name *</label>
+            <input type="text" id="childName" placeholder="Child's name">
+            <label>Age</label>
+            <input type="text" id="childAge" placeholder="e.g., 3 years">
+            <label>Weight (kg)</label>
+            <input type="number" id="childWeight" placeholder="Optional">
+            <button class="btn" onclick="addChild()">Add Child</button>
+            <button class="btn btn-secondary" onclick="showChildrenList()">Cancel</button>
+        </div>
+
+        <!-- Child Records View -->
+        <div id="recordsView" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="recordsTitle">Records</h2>
+                <button class="btn btn-secondary" style="width: auto; padding: 8px 16px;" onclick="showChildrenList()">Back</button>
+            </div>
+            <div id="recordsList"></div>
+            <button class="btn" onclick="showAddRecord()">+ Add Record</button>
+        </div>
+
+        <!-- Add Record View -->
+        <div id="addRecordView" class="card hidden">
+            <h2 style="margin-bottom: 20px;">Add Record</h2>
+            <label>Temperature (°C) *</label>
+            <input type="number" step="0.1" id="recordTemp" placeholder="e.g., 38.5">
+            <label>Medication</label>
+            <select id="recordMed">
+                <option value="">Select medication</option>
+                <option value="Calpol Infant">Calpol Infant (120mg/5ml)</option>
+                <option value="Nurofen">Nurofen for Children (100mg/5ml)</option>
+                <option value="Pinamox">Pinamox (125mg/5ml)</option>
+                <option value="Ventolin">Ventolin Inhaler</option>
+            </select>
+            <label>Dose (ml)</label>
+            <input type="number" step="0.1" id="recordDose" placeholder="e.g., 5.0">
+            <label>Notes</label>
+            <textarea id="recordNotes" rows="3" placeholder="Any observations..."></textarea>
+            <button class="btn" onclick="addRecord()">Add Record</button>
+            <button class="btn btn-secondary" onclick="showRecords()">Cancel</button>
         </div>
     </div>
 
-    <div id="root">
-        <div class="loading">Loading Dosed...</div>
-    </div>
+    <script>
+        let children = [];
+        let records = [];
+        let currentChild = null;
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        // Load data on startup
+        function loadData() {
+            const savedChildren = localStorage.getItem('children');
+            const savedRecords = localStorage.getItem('records');
+            if (savedChildren) children = JSON.parse(savedChildren);
+            if (savedRecords) records = JSON.parse(savedRecords);
+            showChildrenList();
+        }
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
-        
-        // Storage API using localStorage
-        window.storage = {
-            async get(key) {
-                const value = localStorage.getItem(key);
-                return value ? { key, value } : null;
-            },
-            async set(key, value) {
-                localStorage.setItem(key, value);
-                return { key, value };
-            },
-            async delete(key) {
-                localStorage.removeItem(key);
-                return { key, deleted: true };
+        // Save data
+        function saveData() {
+            localStorage.setItem('children', JSON.stringify(children));
+            localStorage.setItem('records', JSON.stringify(records));
+        }
+
+        // Views
+        function hideAllViews() {
+            document.getElementById('childrenView').classList.add('hidden');
+            document.getElementById('addChildView').classList.add('hidden');
+            document.getElementById('recordsView').classList.add('hidden');
+            document.getElementById('addRecordView').classList.add('hidden');
+        }
+
+        function showChildrenList() {
+            hideAllViews();
+            document.getElementById('childrenView').classList.remove('hidden');
+            renderChildren();
+        }
+
+        function showAddChild() {
+            hideAllViews();
+            document.getElementById('addChildView').classList.remove('hidden');
+            document.getElementById('childName').value = '';
+            document.getElementById('childAge').value = '';
+            document.getElementById('childWeight').value = '';
+        }
+
+        function showRecords() {
+            hideAllViews();
+            document.getElementById('recordsView').classList.remove('hidden');
+            document.getElementById('recordsTitle').textContent = 'Records for ' + currentChild.name;
+            renderRecords();
+        }
+
+        function showAddRecord() {
+            hideAllViews();
+            document.getElementById('addRecordView').classList.remove('hidden');
+            document.getElementById('recordTemp').value = '';
+            document.getElementById('recordMed').value = '';
+            document.getElementById('recordDose').value = '';
+            document.getElementById('recordNotes').value = '';
+        }
+
+        // Children
+        function addChild() {
+            const name = document.getElementById('childName').value;
+            if (!name) {
+                alert('Please enter a name');
+                return;
             }
-        };
+            const child = {
+                id: Date.now(),
+                name: name,
+                age: document.getElementById('childAge').value,
+                weight: document.getElementById('childWeight').value
+            };
+            children.push(child);
+            saveData();
+            showChildrenList();
+        }
 
-        // Lucide Icons as React components
-        const Plus = () => <svg className="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
-        const Thermometer = () => <svg className="lucide lucide-thermometer" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>;
-        const Droplet = () => <svg className="lucide lucide-droplet" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>;
-        const Activity = () => <svg className="lucide lucide-activity" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
-        const User = () => <svg className="lucide lucide-user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
-        const Trash2 = () => <svg className="lucide lucide-trash-2" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
-        const Weight = () => <svg className="lucide lucide-weight" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z"/></svg>;
-        const Clock = () => <svg className="lucide lucide-clock" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-        const TrendingUp = () => <svg className="lucide lucide-trending-up" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
-        const Download = () => <svg className="lucide lucide-download" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
-        const Bell = () => <svg className="lucide lucide-bell" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>;
-        const AlertCircle = () => <svg className="lucide lucide-alert-circle" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>;
-        const Pill = () => <svg className="lucide lucide-pill" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>;
+        function deleteChild(id) {
+            if (confirm('Delete this child and all records?')) {
+                children = children.filter(c => c.id !== id);
+                records = records.filter(r => r.childId !== id);
+                saveData();
+                renderChildren();
+            }
+        }
 
-        // YOUR COMPLETE APP CODE GOES HERE
-        // Copy the entire component from the main fever tracker artifact
-        
-        function App() {
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-                    <div className="max-w-4xl mx-auto">
-                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                            <h1 className="text-3xl font-bold text-indigo-900 flex items-center gap-2">
-                                <Thermometer />
-                                Dosed
-                            </h1>
-                            <p className="text-gray-600 mt-2">
-                                Child Health Tracker
-                            </p>
-                            <div className="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
-                                <p className="text-sm text-yellow-800">
-                                    <strong>Instructions:</strong><br/>
-                                    1. Find the complete fever tracker component code<br/>
-                                    2. Replace this entire App function<br/>
-                                    3. Save and refresh!
-                                </p>
-                            </div>
-                        </div>
+        function viewChild(id) {
+            currentChild = children.find(c => c.id === id);
+            showRecords();
+        }
+
+        function renderChildren() {
+            const list = document.getElementById('childrenList');
+            if (children.length === 0) {
+                list.innerHTML = '<p style="color: #6B7280; text-align: center; padding: 20px;">No children added yet</p>';
+                return;
+            }
+            list.innerHTML = children.map(child => `
+                <div class="child-item">
+                    <div>
+                        <h3>${child.name}</h3>
+                        <p style="color: #6B7280; font-size: 14px;">${child.age || 'Age not set'}</p>
+                    </div>
+                    <div>
+                        <button class="btn" style="width: auto; padding: 8px 16px; margin: 0 5px 0 0;" onclick="viewChild(${child.id})">View</button>
+                        <button class="btn btn-danger" onclick="deleteChild(${child.id})">Delete</button>
                     </div>
                 </div>
-            );
+            `).join('');
         }
 
-        ReactDOM.render(<App />, document.getElementById('root'));
-    </script>
-
-    <script>
-        let deferredPrompt;
-        
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('SW registered'))
-                    .catch(err => console.log('SW failed'));
-            });
+        // Records
+        function addRecord() {
+            const temp = document.getElementById('recordTemp').value;
+            if (!temp) {
+                alert('Please enter temperature');
+                return;
+            }
+            const record = {
+                id: Date.now(),
+                childId: currentChild.id,
+                timestamp: new Date().toLocaleString('en-GB'),
+                temperature: temp,
+                medication: document.getElementById('recordMed').value,
+                dose: document.getElementById('recordDose').value,
+                notes: document.getElementById('recordNotes').value
+            };
+            records.push(record);
+            saveData();
+            showRecords();
         }
-        
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            setTimeout(() => {
-                const prompt = document.getElementById('installPrompt');
-                if (prompt && !localStorage.getItem('installDismissed')) {
-                    prompt.classList.add('show');
-                }
-            }, 3000);
-        });
-        
-        function installApp() {
-            const prompt = document.getElementById('installPrompt');
-            prompt.classList.remove('show');
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    deferredPrompt = null;
-                });
+
+        function deleteRecord(id) {
+            if (confirm('Delete this record?')) {
+                records = records.filter(r => r.id !== id);
+                saveData();
+                renderRecords();
             }
         }
-        
-        function dismissInstall() {
-            document.getElementById('installPrompt').classList.remove('show');
-            localStorage.setItem('installDismissed', 'true');
+
+        function renderRecords() {
+            const list = document.getElementById('recordsList');
+            const childRecords = records.filter(r => r.childId === currentChild.id);
+            if (childRecords.length === 0) {
+                list.innerHTML = '<p style="color: #6B7280; text-align: center; padding: 20px;">No records yet</p>';
+                return;
+            }
+            list.innerHTML = childRecords.reverse().map(record => `
+                <div class="record-item">
+                    <div class="record-meta">${record.timestamp}</div>
+                    <div class="record-data">
+                        <div class="data-item">
+                            <div class="data-label">Temperature</div>
+                            <div class="data-value">${record.temperature}°C</div>
+                        </div>
+                        ${record.medication ? `
+                        <div class="data-item">
+                            <div class="data-label">Medication</div>
+                            <div class="data-value" style="font-size: 14px;">${record.medication}</div>
+                        </div>
+                        ` : ''}
+                        ${record.dose ? `
+                        <div class="data-item">
+                            <div class="data-label">Dose</div>
+                            <div class="data-value">${record.dose} ml</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ${record.notes ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #E5E7EB;"><strong>Notes:</strong> ${record.notes}</div>` : ''}
+                    <button class="btn btn-danger" style="margin-top: 10px;" onclick="deleteRecord(${record.id})">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        // Start app
+        loadData();
+
+        // PWA Install
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
         }
     </script>
 </body>
