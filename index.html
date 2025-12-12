@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dosed">
+    <meta name="description" content="Dosed - Monitor child temperatures, medications, and vital signs">
+    
+    <title>Dosed - Child Health Tracker</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%234F46E5' width='180' height='180'/><text x='90' y='110' font-size='80' text-anchor='middle' fill='white'>🌡️</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌡️</text></svg>">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #EFF6FF 0%, #C7D2FE 100%);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        #root {
+            min-height: 100vh;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-size: 1.5rem;
+            color: #4F46E5;
+        }
+        .install-prompt {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+        }
+        .install-prompt.show {
+            display: block;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .install-prompt h3 {
+            margin-bottom: 0.5rem;
+            color: #1F2937;
+        }
+        .install-prompt p {
+            margin-bottom: 1rem;
+            color: #6B7280;
+            font-size: 0.9rem;
+        }
+        .install-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .install-buttons button {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .install-buttons .install-btn {
+            background: #4F46E5;
+            color: white;
+        }
+        .install-buttons .dismiss-btn {
+            background: #E5E7EB;
+            color: #374151;
+        }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="installPrompt" class="install-prompt">
+        <h3>📱 Install App</h3>
+        <p>Add Dosed to your home screen for quick access!</p>
+        <div class="install-buttons">
+            <button class="install-btn" onclick="installApp()">Install</button>
+            <button class="dismiss-btn" onclick="dismissInstall()">Not Now</button>
+        </div>
+    </div>
+
+    <div id="root">
+        <div class="loading">Loading Dosed...</div>
+    </div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
+        
+        // Storage API using localStorage
+        window.storage = {
+            async get(key) {
+                const value = localStorage.getItem(key);
+                return value ? { key, value } : null;
+            },
+            async set(key, value) {
+                localStorage.setItem(key, value);
+                return { key, value };
+            },
+            async delete(key) {
+                localStorage.removeItem(key);
+                return { key, deleted: true };
+            }
+        };
+
+        // Lucide Icons as React components
+        const Plus = () => <svg className="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
+        const Thermometer = () => <svg className="lucide lucide-thermometer" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>;
+        const Droplet = () => <svg className="lucide lucide-droplet" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>;
+        const Activity = () => <svg className="lucide lucide-activity" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+        const User = () => <svg className="lucide lucide-user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+        const Trash2 = () => <svg className="lucide lucide-trash-2" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+        const Weight = () => <svg className="lucide lucide-weight" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z"/></svg>;
+        const Clock = () => <svg className="lucide lucide-clock" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+        const TrendingUp = () => <svg className="lucide lucide-trending-up" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
+        const Download = () => <svg className="lucide lucide-download" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
+        const Bell = () => <svg className="lucide lucide-bell" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>;
+        const AlertCircle = () => <svg className="lucide lucide-alert-circle" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>;
+        const Pill = () => <svg className="lucide lucide-pill" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>;
+
+        // YOUR COMPLETE APP CODE GOES HERE
+        // Copy the entire component from the main fever tracker artifact
+        
+        function App() {
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                            <h1 className="text-3xl font-bold text-indigo-900 flex items-center gap-2">
+                                <Thermometer />
+                                Dosed
+                            </h1>
+                            <p className="text-gray-600 mt-2">
+                                Child Health Tracker
+                            </p>
+                            <div className="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                                <p className="text-sm text-yellow-800">
+                                    <strong>Instructions:</strong><br/>
+                                    1. Find the complete fever tracker component code<br/>
+                                    2. Replace this entire App function<br/>
+                                    3. Save and refresh!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+
+    <script>
+        let deferredPrompt;
+        
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW failed'));
+            });
+        }
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            setTimeout(() => {
+                const prompt = document.getElementById('installPrompt');
+                if (prompt && !localStorage.getItem('installDismissed')) {
+                    prompt.classList.add('show');
+                }
+            }, 3000);
+        });
+        
+        function installApp() {
+            const prompt = document.getElementById('installPrompt');
+            prompt.classList.remove('show');
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    deferredPrompt = null;
+                });
+            }
+        }
+        
+        function dismissInstall() {
+            document.getElementById('installPrompt').classList.remove('show');
+            localStorage.setItem('installDismissed', 'true');
+        }
+    </script>
+</body>
+</html>
