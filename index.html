@@ -1406,6 +1406,7 @@ function renderCharts() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         scales: { y: { min: 35, max: 42 } }
       }
     });
@@ -1423,7 +1424,11 @@ function renderCharts() {
             tension: 0.3
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          animation: false
+        }
       });
     }
     
@@ -1440,7 +1445,11 @@ function renderCharts() {
             tension: 0.3
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          animation: false
+        }
       });
     }
   }, 100);
@@ -1671,16 +1680,31 @@ function shareDataQR(childId) {
     const canvas = document.getElementById('qrcode');
     const shareUrl = `${window.location.origin}${window.location.pathname}?import=${compressed}`;
     
-    QRCode.toCanvas(canvas, shareUrl, {
-      width: 300,
-      margin: 2,
-      color: {
-        dark: '#004680',
-        light: '#FFFFFF'
-      }
-    }, (error) => {
-      if (error) console.error('QR Code error:', error);
-    });
+    // Check if QRCode library is loaded
+    if (typeof QRCode === 'undefined') {
+      console.error('QRCode library not loaded');
+      canvas.parentElement.innerHTML = '<div class="text-red-600 p-4">⚠️ QR Code library failed to load. Please use the "Copy Link" or "Share via WhatsApp" options instead.</div>';
+      return;
+    }
+    
+    try {
+      QRCode.toCanvas(canvas, shareUrl, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#004680',
+          light: '#FFFFFF'
+        }
+      }, (error) => {
+        if (error) {
+          console.error('QR Code error:', error);
+          canvas.parentElement.innerHTML = '<div class="text-red-600 p-4">⚠️ Could not generate QR code. Please use "Copy Link" instead.</div>';
+        }
+      });
+    } catch (err) {
+      console.error('QR generation failed:', err);
+      canvas.parentElement.innerHTML = '<div class="text-red-600 p-4">⚠️ QR generation failed. URL: <code class="text-xs">' + shareUrl.substring(0, 50) + '...</code></div>';
+    }
     
     // WhatsApp share
     document.getElementById('btnShareWhatsApp').onclick = () => {
@@ -1711,10 +1735,14 @@ function shareDataQR(childId) {
     
     // Download QR
     document.getElementById('btnDownloadQR').onclick = () => {
-      const link = document.createElement('a');
-      link.download = `dosed-${child.name.replace(/\s+/g, '_')}-qr.png`;
-      link.href = canvas.toDataURL();
-      link.click();
+      try {
+        const link = document.createElement('a');
+        link.download = `dosed-${child.name.replace(/\s+/g, '_')}-qr.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+      } catch (err) {
+        alert('Could not download QR code. Please screenshot instead.');
+      }
     };
     
     if (typeof lucide !== "undefined") lucide.createIcons();
