@@ -3,11 +3,10 @@ const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://cdn.jsdelivr.net/npm/recharts@2.5.0/dist/Recharts.js',
-  'https://unpkg.com/lucide@latest',
-  'https://unpkg.com/@babel/standalone/babel.min.js'
+  'https://cdn.tailwindcss.com',
+  'https://unpkg.com/lucide@0.278.0/dist/lucide.min.js',
+  'https://cdn.jsdelivr.net/npm/chart.js',
+  'https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap'
 ];
 
 // Install event - cache resources
