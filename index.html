@@ -21,6 +21,9 @@
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
+  <!-- QR Code generator -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  
   <style>
     /* EB Garamond font family */
     body {
@@ -70,9 +73,14 @@
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold text-gray-800">Children</h2>
-        <button id="btnAddChild" class="bg-[#004680] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#003a6b]">
-          <i data-lucide="plus"></i> Add Child
-        </button>
+        <div class="flex gap-2">
+          <button id="btnImportData" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700">
+            <i data-lucide="upload"></i> Import Data
+          </button>
+          <button id="btnAddChild" class="bg-[#004680] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#003a6b]">
+            <i data-lucide="plus"></i> Add Child
+          </button>
+        </div>
       </div>
 
       <div id="childrenGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -101,6 +109,20 @@
           <canvas id="rrChart" height="120"></canvas>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Privacy Notice -->
+  <div class="max-w-4xl mx-auto mt-6 mb-4">
+    <div class="bg-white rounded-lg shadow p-4 text-center">
+      <div class="flex items-center justify-center gap-2 text-sm text-gray-600 mb-2">
+        <i data-lucide="shield-check" class="w-4 h-4 text-green-600"></i>
+        <span class="font-semibold text-green-700">100% Private & Secure</span>
+      </div>
+      <p class="text-xs text-gray-500">
+        All your child's health data is stored <strong>only on your device</strong>. 
+        No cloud, no servers, no tracking. Your data never leaves your phone unless you choose to export it.
+      </p>
     </div>
   </div>
 
@@ -521,8 +543,11 @@ function renderChildren() {
             <i data-lucide="file-plus" class="w-3 h-3"></i> Prescription
           </button>
           <button class="btn-edit-child bg-gray-500 text-white px-3 py-1 rounded text-sm" data-id="${child.id}">Edit</button>
+          <button class="btn-share-qr bg-purple-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1" data-id="${child.id}">
+            <i data-lucide="qr-code" class="w-3 h-3"></i> QR
+          </button>
           <button class="btn-export bg-blue-500 text-white px-3 py-1 rounded text-sm flex items-center gap-1" data-id="${child.id}">
-            <i data-lucide="download" class="w-3 h-3"></i> Export
+            <i data-lucide="share-2" class="w-3 h-3"></i> Share
           </button>
         </div>
       </div>
@@ -552,6 +577,9 @@ function attachChildrenEvents() {
   document.querySelectorAll('.btn-export').forEach(b => b.onclick = e => {
     exportData(e.currentTarget.dataset.id);
   });
+  document.querySelectorAll('.btn-share-qr').forEach(b => b.onclick = e => {
+    shareDataQR(e.currentTarget.dataset.id);
+  });
   document.querySelectorAll('.btn-delete-presc').forEach(b => b.onclick = e => {
     deletePrescription(e.currentTarget.dataset.id);
   });
@@ -565,8 +593,10 @@ function attachChildrenEvents() {
    =========================== */
 
 function addChild(child) {
+  console.log('Adding child:', child);
   child.id = uid();
   state.children.push(child);
+  console.log('State after adding:', state.children);
   persistAndRender();
 }
 
@@ -1526,10 +1556,267 @@ function handleBarcodeDetected(barcode) {
 }
 
 /* ===========================
+   Data Sharing via QR Code & Import
+   =========================== */
+
+function shareDataQR(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const childRecords = getRecordsForChild(childId);
+  const childPresc = getPrescriptionsForChild(childId);
+  
+  // Create shareable data package
+  const shareData = {
+    version: '9.0',
+    child: child,
+    records: childRecords.slice(0, 50), // Last 50 records
+    prescriptions: childPresc,
+    exportedAt: new Date().toISOString()
+  };
+  
+  const dataString = JSON.stringify(shareData);
+  const compressed = btoa(dataString); // Base64 encode
+  
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Share ${escapeHtml(child.name)}'s Data</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <div class="space-y-4">
+      <div class="bg-blue-50 p-4 rounded">
+        <p class="text-sm text-blue-900 mb-2">
+          <i data-lucide="info" class="w-4 h-4 inline"></i>
+          This QR code contains ${escapeHtml(child.name)}'s health data. Anyone who scans it can import this data into their Dosed app.
+        </p>
+      </div>
+      
+      <div class="bg-white p-4 border rounded flex justify-center">
+        <canvas id="qrcode"></canvas>
+      </div>
+      
+      <div class="space-y-2">
+        <button id="btnShareWhatsApp" class="w-full bg-green-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-green-700">
+          <i data-lucide="message-circle"></i> Share via WhatsApp
+        </button>
+        <button id="btnCopyLink" class="w-full bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700">
+          <i data-lucide="copy"></i> Copy Share Link
+        </button>
+        <button id="btnDownloadQR" class="w-full bg-gray-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-gray-700">
+          <i data-lucide="download"></i> Download QR Code
+        </button>
+      </div>
+      
+      <div class="text-xs text-gray-500 text-center">
+        <p>⚠️ Only share with trusted family members</p>
+        <p>Data includes: Profile, last 50 records, active prescriptions</p>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  // Generate QR code
+  setTimeout(() => {
+    const canvas = document.getElementById('qrcode');
+    const shareUrl = `${window.location.origin}${window.location.pathname}?import=${compressed}`;
+    
+    QRCode.toCanvas(canvas, shareUrl, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#004680',
+        light: '#FFFFFF'
+      }
+    }, (error) => {
+      if (error) console.error('QR Code error:', error);
+    });
+    
+    // WhatsApp share
+    document.getElementById('btnShareWhatsApp').onclick = () => {
+      const message = `📱 *Dosed Health Data*\n\n` +
+        `I'm sharing ${child.name}'s health records with you.\n\n` +
+        `To import:\n` +
+        `1. Open this link: ${shareUrl}\n` +
+        `2. Or scan the QR code\n` +
+        `3. Data will be imported automatically\n\n` +
+        `Includes:\n` +
+        `✅ Profile information\n` +
+        `✅ Last 50 health records\n` +
+        `✅ Active prescriptions\n\n` +
+        `_Exported from Dosed app_`;
+      
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    };
+    
+    // Copy link
+    document.getElementById('btnCopyLink').onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('✓ Share link copied to clipboard!');
+      } catch (err) {
+        prompt('Copy this link:', shareUrl);
+      }
+    };
+    
+    // Download QR
+    document.getElementById('btnDownloadQR').onclick = () => {
+      const link = document.createElement('a');
+      link.download = `dosed-${child.name.replace(/\s+/g, '_')}-qr.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    };
+    
+    lucide.createIcons();
+  }, 100);
+}
+
+function importDataFromURL() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const importData = urlParams.get('import');
+  
+  if (!importData) return;
+  
+  try {
+    const dataString = atob(importData);
+    const shareData = JSON.parse(dataString);
+    
+    if (confirm(`Import health data for ${shareData.child.name}?\n\nIncludes:\n• Profile information\n• ${shareData.records.length} health records\n• ${shareData.prescriptions.length} prescriptions\n\nThis will add to your existing data.`)) {
+      
+      // Generate new IDs to avoid conflicts
+      const oldChildId = shareData.child.id;
+      const newChildId = uid();
+      
+      // Import child with new ID
+      const importedChild = {
+        ...shareData.child,
+        id: newChildId,
+        name: shareData.child.name + ' (imported)'
+      };
+      state.children.push(importedChild);
+      
+      // Import records with updated child ID
+      shareData.records.forEach(record => {
+        state.records.unshift({
+          ...record,
+          id: uid(),
+          childId: newChildId
+        });
+      });
+      
+      // Import prescriptions with updated child ID
+      shareData.prescriptions.forEach(presc => {
+        state.prescriptions.push({
+          ...presc,
+          id: uid(),
+          childId: newChildId
+        });
+      });
+      
+      persistAndRender();
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      alert(`✓ Successfully imported data for ${shareData.child.name}!\n\nYou can now edit the name and manage the records.`);
+    }
+  } catch (error) {
+    console.error('Import error:', error);
+    alert('❌ Failed to import data. The share link may be invalid or corrupted.');
+  }
+}
+
+function openImportDataModal() {
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Import Health Data</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <div class="space-y-4">
+      <div class="bg-blue-50 p-4 rounded">
+        <p class="text-sm text-blue-900">
+          <i data-lucide="info" class="w-4 h-4 inline"></i>
+          Import health data shared by another Dosed user via QR code or link.
+        </p>
+      </div>
+      
+      <div class="space-y-3">
+        <h4 class="font-semibold">Method 1: Scan QR Code</h4>
+        <button id="btnScanQR" class="w-full bg-purple-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-purple-700">
+          <i data-lucide="camera"></i> Scan QR Code
+        </button>
+        
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-gray-300"></div>
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-2 bg-white text-gray-500">OR</span>
+          </div>
+        </div>
+        
+        <h4 class="font-semibold">Method 2: Paste Share Link</h4>
+        <input id="importLink" type="text" placeholder="Paste share link here..." class="w-full border rounded px-3 py-2">
+        <button id="btnImportFromLink" class="w-full bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700">
+          <i data-lucide="upload"></i> Import from Link
+        </button>
+      </div>
+      
+      <div class="text-xs text-gray-500">
+        <p>⚠️ Imported data will be added to your existing records</p>
+        <p>✓ You can edit or delete imported data after import</p>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  document.getElementById('btnScanQR').onclick = () => {
+    alert('📷 QR Code scanning:\n\n1. Use your phone\'s camera app\n2. Point at the QR code\n3. Tap the notification to open the link\n4. Data will import automatically');
+    closeModal();
+  };
+  
+  document.getElementById('btnImportFromLink').onclick = () => {
+    const link = document.getElementById('importLink').value.trim();
+    if (!link) {
+      alert('Please paste a share link');
+      return;
+    }
+    
+    try {
+      const url = new URL(link);
+      const importData = url.searchParams.get('import');
+      
+      if (!importData) {
+        alert('Invalid share link - no data found');
+        return;
+      }
+      
+      // Trigger import
+      window.location.href = link;
+    } catch (err) {
+      alert('Invalid link format. Please paste the complete share link.');
+    }
+  };
+  
+  lucide.createIcons();
+}
+
+/* ===========================
    Init
    =========================== */
 
 document.getElementById('btnAddChild').onclick = () => openChildModal('add');
+document.getElementById('btnImportData').onclick = () => openImportDataModal();
+
+// Check for import data in URL
+importDataFromURL();
 
 render();
 setInterval(checkReminders, 60000); // Check every minute
