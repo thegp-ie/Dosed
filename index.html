@@ -271,6 +271,49 @@ const MEDICINES = [
 ];
 
 /* ===========================
+   Icon Fallback System
+   =========================== */
+
+// Fallback if Lucide doesn't load
+if (typeof lucide === 'undefined') {
+  console.warn('Lucide icons not loaded, using emoji fallback');
+  window.lucide = {
+    createIcons: () => {
+      // Simple emoji fallback for common icons
+      document.querySelectorAll('[data-lucide]').forEach(el => {
+        const iconName = el.getAttribute('data-lucide');
+        const emojiMap = {
+          'thermometer': '🌡️',
+          'plus': '➕',
+          'user': '👤',
+          'trash-2': '🗑️',
+          'pill': '💊',
+          'file-plus': '📄',
+          'download': '⬇️',
+          'qr-code': '📷',
+          'share-2': '↗️',
+          'upload': '⬆️',
+          'bell': '🔔',
+          'alert-circle': '⚠️',
+          'x': '✖️',
+          'info': 'ℹ️',
+          'message-circle': '💬',
+          'copy': '📋',
+          'camera': '📷',
+          'scan-barcode': '📷',
+          'heart-pulse': '💓',
+          'alert-triangle': '⚠️',
+          'shield-check': '🛡️'
+        };
+        const emoji = emojiMap[iconName] || '•';
+        el.textContent = emoji;
+        el.style.display = 'inline';
+      });
+    }
+  };
+}
+
+/* ===========================
    Storage
    =========================== */
 
@@ -437,7 +480,9 @@ function checkReminders() {
 function render() {
   renderChildren();
   checkReminders();
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') {
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
 }
 
 function persistAndRender() {
@@ -760,7 +805,9 @@ function openModal(html, onClose) {
   modal.innerHTML = html;
   backdrop.classList.remove('hidden');
   backdrop.classList.add('flex');
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
   modal.querySelectorAll('.btn-modal-close').forEach(b => b.onclick = () => closeModal(onClose));
 }
 
@@ -1670,7 +1717,7 @@ function shareDataQR(childId) {
       link.click();
     };
     
-    lucide.createIcons();
+    if (typeof lucide !== "undefined") lucide.createIcons();
   }, 100);
 }
 
@@ -1805,7 +1852,7 @@ function openImportDataModal() {
     }
   };
   
-  lucide.createIcons();
+  if (typeof lucide !== "undefined") lucide.createIcons();
 }
 
 /* ===========================
@@ -1825,7 +1872,17 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-lucide.createIcons();
+// Initialize Lucide icons (wait for library to load)
+if (typeof lucide !== 'undefined') {
+  if (typeof lucide !== "undefined") lucide.createIcons();
+} else {
+  // Wait for lucide to load
+  window.addEventListener('load', () => {
+    if (typeof lucide !== 'undefined') {
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    }
+  });
+}
 </script>
 
 </body>
