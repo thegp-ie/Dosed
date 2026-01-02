@@ -1,0 +1,30 @@
+{
+  "name": "Dosed - Child Health Tracker",
+  "short_name": "Dosed",
+  "description": "Monitor child temperatures, medications, symptoms, and vital signs",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#004680",
+  "theme_color": "#004680",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23004680' width='192' height='192' rx='48'/><text x='96' y='130' font-size='100' text-anchor='middle' fill='white'>🌡️</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23004680' width='512' height='512' rx='128'/><text x='256' y='360' font-size='280' text-anchor='middle' fill='white'>🌡️</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["health", "medical", "utilities"],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%23EFF6FF' width='540' height='720'/><text x='270' y='360' font-size='200' text-anchor='middle' fill='%234F46E5'>📱</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml"
+    }
+  ]
+}
