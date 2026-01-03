@@ -43,8 +43,15 @@
     .medication-status-overdue { background: #FEE2E2; border-left: 4px solid #EF4444; }
     .time-btn { transition: all 0.2s; }
     .time-btn.active { background: #004680; color: white; }
+    
+    /* CRITICAL FIX: Force fixed height on chart containers to prevent infinite expansion */
+    canvas {
+      max-height: 300px !important;
+      height: 300px !important;
+    }
   </style>
 </head>
+  
 <body class="min-h-screen bg-gradient-to-br from-blue-50 to-[#E6F0F8] p-4">
 
   <div class="max-w-4xl mx-auto">
