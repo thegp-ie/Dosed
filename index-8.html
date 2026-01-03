@@ -1,0 +1,2578 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#004680">
+  <title>Dosed — Ultimate Child Health Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Google Fonts - EB Garamond -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide icons CDN -->
+  <script src="https://unpkg.com/lucide@0.278.0/dist/lucide.min.js"></script>
+  
+  <!-- Chart.js CDN - Locked to stable version 4.4.1 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  
+  <!-- QR Code generator -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  
+  <style>
+    /* EB Garamond font family */
+    body {
+      font-family: 'EB Garamond', 'Garamond', 'Cormorant Garamond', Georgia, serif;
+    }
+    
+    /* Ensure headings and buttons use the font too */
+    h1, h2, h3, h4, h5, h6, button, input, select, textarea {
+      font-family: 'EB Garamond', 'Garamond', Georgia, serif;
+    }
+    
+    .modal-backdrop { background: rgba(0,0,0,0.4); }
+    .cursor-hand { cursor: pointer; }
+    .small-txt { font-size: 0.8rem; }
+    .child-card-active { border: 3px solid #004680; background: #E6F0F8; }
+    .medication-status-due { background: #FEF3C7; border-left: 4px solid #F59E0B; }
+    .medication-status-overdue { background: #FEE2E2; border-left: 4px solid #EF4444; }
+    .time-btn { transition: all 0.2s; }
+    .time-btn.active { background: #004680; color: white; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-[#E6F0F8] p-4">
+
+  <div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 bg-gradient-to-br from-[#004680] to-[#7B68A6] rounded-full flex items-center justify-center">
+            <i data-lucide="thermometer" class="text-white w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
+              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v11.0</span>
+            </div>
+            <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-gray-500">Medical Grade</div>
+          <div class="text-xs text-gray-400">January 2026</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reminder Banner -->
+    <div id="reminderBanner" class="hidden bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-lg">
+      <div class="flex items-start">
+        <i data-lucide="bell" class="text-yellow-600 mr-3 mt-1"></i>
+        <div>
+          <h3 class="font-semibold text-yellow-800">Medication Reminders</h3>
+          <div id="remindersList" class="mt-1 text-sm text-yellow-700"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Children Section -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-800">Children</h2>
+        <div class="flex gap-2">
+          <button id="btnImportData" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700">
+            <i data-lucide="upload"></i> Import Data
+          </button>
+          <button id="btnAddChild" class="bg-[#004680] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#003a6b]">
+            <i data-lucide="plus"></i> Add Child
+          </button>
+        </div>
+      </div>
+
+      <div id="childrenGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- children cards injected here -->
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-800">Charts</h2>
+        <button id="btnToggleTrends" class="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300">Toggle Trends</button>
+      </div>
+
+      <div id="chartArea" class="hidden space-y-6">
+        <div>
+          <h3 class="text-sm font-semibold mb-2">Temperature Over Time</h3>
+          <canvas id="tempChart" height="120"></canvas>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold mb-2">Heart Rate</h3>
+          <canvas id="hrChart" height="120"></canvas>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold mb-2">Respiratory Rate</h3>
+          <canvas id="rrChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Management Section -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-800">Data Management</h2>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button id="btnClearAllData" class="bg-red-600 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-red-700">
+          <i data-lucide="trash-2"></i> Clear All Data
+        </button>
+        <button id="btnExportAll" class="bg-green-600 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700">
+          <i data-lucide="download"></i> Export All to CSV
+        </button>
+      </div>
+      
+      <div class="mt-4 text-xs text-gray-500 text-center">
+        <p>💡 Always export your data before clearing</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy Notice -->
+  <div class="max-w-4xl mx-auto mt-6 mb-4">
+    <div class="bg-white rounded-lg shadow p-4 text-center">
+      <div class="flex items-center justify-center gap-2 text-sm text-gray-600 mb-2">
+        <i data-lucide="shield-check" class="w-4 h-4 text-green-600"></i>
+        <span class="font-semibold text-green-700">100% Private & Secure</span>
+      </div>
+      <p class="text-xs text-gray-500">
+        All your child's health data is stored <strong>only on your device</strong>. 
+        No cloud, no servers, no tracking. Your data never leaves your phone unless you choose to export it.
+      </p>
+    </div>
+  </div>
+
+  <!-- Modal Backdrop -->
+  <div id="modalBackdrop" class="fixed inset-0 hidden items-center justify-center modal-backdrop z-40">
+    <div id="modal" class="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 mx-4">
+      <!-- modal content injected -->
+    </div>
+  </div>
+
+<script>
+/* ===========================
+   Medicine Database
+   =========================== */
+
+// Common Irish medicine barcodes (EAN-13)
+const MEDICINE_BARCODES = {
+  '5000347005916': 'Calpol Infant (120mg/5ml)',
+  '5000347006012': 'Calpol Six Plus (250mg/5ml)',
+  '5000347006241': 'Calpol Infant Suspension Sugar Free',
+  '5000347009747': 'Nurofen for Children (100mg/5ml)',
+  '5000347009754': 'Nurofen for Children Orange',
+  '5000347009761': 'Nurofen for Children Strawberry',
+  '5391516691819': 'Pinamox Suspension',
+  // Add more as needed - users can also add custom entries
+};
+
+const COMMON_SYMPTOMS = [
+  'Cough', 'Runny nose', 'Congestion', 'Sore throat', 'Earache',
+  'Headache', 'Vomiting', 'Diarrhea', 'Rash', 'Difficulty breathing',
+  'Wheezing', 'Lethargy', 'Poor feeding', 'Irritability', 'Seizure'
+];
+
+// Clinical reference ranges - ICTS 2016 (Irish Children's Triage System)
+const VITAL_RANGES = {
+  respiratoryRate: [
+    { minAge: 0, maxAge: 3, low: 20, normal: [30, 60], high: 80 },      // 0-3 months
+    { minAge: 3, maxAge: 6, low: 20, normal: [30, 60], high: 80 },      // 4-6 months
+    { minAge: 6, maxAge: 12, low: 17, normal: [25, 45], high: 60 },     // 7-12 months
+    { minAge: 12, maxAge: 36, low: 15, normal: [20, 30], high: 40 },    // 1-3 years
+    { minAge: 36, maxAge: 72, low: 12, normal: [16, 24], high: 32 },    // 4-6 years
+    { minAge: 72, maxAge: 999, low: 10, normal: [14, 20], high: 26 }    // > 7 years
+  ],
+  heartRate: [
+    { minAge: 0, maxAge: 3, low: 65, normal: [90, 180], high: 230 },    // 0-3 months
+    { minAge: 3, maxAge: 6, low: 63, normal: [80, 160], high: 210 },    // 4-6 months
+    { minAge: 6, maxAge: 12, low: 60, normal: [80, 140], high: 180 },   // 7-12 months
+    { minAge: 12, maxAge: 36, low: 58, normal: [75, 130], high: 165 },  // 1-3 years
+    { minAge: 36, maxAge: 72, low: 55, normal: [70, 110], high: 140 },  // 4-6 years
+    { minAge: 72, maxAge: 999, low: 45, normal: [60, 90], high: 120 }   // > 7 years
+  ]
+};
+
+// Pediatric weight estimates (Advanced Pediatric Life Support formulas)
+const WEIGHT_ESTIMATES = {
+  // Age in months -> [min expected weight kg, max expected weight kg]
+  getExpectedWeight: function(ageMonths) {
+    if (ageMonths < 12) {
+      // Infants: Birth weight ~3.5kg, gain ~700g/month first 6 months, ~500g/month 6-12 months
+      const birthWeight = 3.5;
+      if (ageMonths <= 6) {
+        const min = birthWeight + (ageMonths * 0.6);
+        const max = birthWeight + (ageMonths * 0.8);
+        return [min, max];
+      } else {
+        const min = birthWeight + (6 * 0.6) + ((ageMonths - 6) * 0.4);
+        const max = birthWeight + (6 * 0.8) + ((ageMonths - 6) * 0.6);
+        return [min, max];
+      }
+    } else if (ageMonths < 60) {
+      // 1-5 years: Weight (kg) = 2 x (age in years + 4)
+      const ageYears = ageMonths / 12;
+      const estimate = 2 * (ageYears + 4);
+      return [estimate * 0.85, estimate * 1.15]; // ±15% range
+    } else {
+      // 5+ years: Weight (kg) = 2 x (age in years + 4)
+      const ageYears = ageMonths / 12;
+      const estimate = 2 * (ageYears + 4);
+      return [estimate * 0.80, estimate * 1.20]; // ±20% range (more variable)
+    }
+  }
+};
+
+// Medication dose limits (manufacturer guidelines from packaging)
+const MEDICATION_LIMITS = {
+  'Calpol Infant (120mg/5ml)': {
+    maxSingleDose: 20,  // ml
+    maxDailyDoses: 4,
+    minInterval: 4,     // hours
+    maxDailyTotal: 60,  // ml (based on 4 x 15ml max dose)
+    minAge: 2,          // months
+    minWeight: 4        // kg
+  },
+  'Calpol Six Plus (250mg/5ml)': {
+    maxSingleDose: 10,  // ml
+    maxDailyDoses: 4,
+    minInterval: 4,
+    maxDailyTotal: 40,
+    minAge: 72,         // 6 years
+    minWeight: 20
+  },
+  'Nurofen for Children (100mg/5ml)': {
+    maxSingleDose: 15,  // ml
+    maxDailyDoses: 3,
+    minInterval: 6,
+    maxDailyTotal: 30,  // ml (max 300mg/day)
+    minAge: 3,          // months (for post-immunisation fever, otherwise 6 months)
+    minWeight: 5
+  }
+};
+
+const MEDICINES = [
+  { 
+    name: 'Calpol Infant (120mg/5ml)', 
+    generic: 'paracetamol', 
+    concentration: '120mg/5ml', 
+    category: 'Antipyretic/Analgesic',
+    interval: 4,
+    dosageGuide: [
+      { minWeight: 4, maxWeight: 8, dose: 2.5, ageGuide: '2-3 months' },
+      { minWeight: 8, maxWeight: 10, dose: 5, ageGuide: '3-6 months' },
+      { minWeight: 10, maxWeight: 13, dose: 7.5, ageGuide: '6-24 months' },
+      { minWeight: 13, maxWeight: 15, dose: 10, ageGuide: '2-4 years' },
+      { minWeight: 15, maxWeight: 21, dose: 10, ageGuide: '4-6 years' },
+      { minWeight: 21, maxWeight: 27, dose: 15, ageGuide: '6-8 years' },
+      { minWeight: 27, maxWeight: 33, dose: 15, ageGuide: '8-10 years' },
+      { minWeight: 33, maxWeight: 43, dose: 20, ageGuide: '10-12 years' }
+    ]
+  },
+  { 
+    name: 'Calpol Six Plus (250mg/5ml)', 
+    generic: 'paracetamol', 
+    concentration: '250mg/5ml', 
+    category: 'Antipyretic/Analgesic',
+    interval: 4,
+    dosageGuide: [
+      { minWeight: 15, maxWeight: 21, dose: 5, ageGuide: '6-8 years' },
+      { minWeight: 21, maxWeight: 27, dose: 7.5, ageGuide: '8-10 years' },
+      { minWeight: 27, maxWeight: 43, dose: 10, ageGuide: '10-12 years' }
+    ]
+  },
+  { 
+    name: 'Nurofen for Children (100mg/5ml)', 
+    generic: 'ibuprofen', 
+    concentration: '100mg/5ml', 
+    category: 'Antipyretic/Analgesic',
+    interval: 6,
+    dosageGuide: [
+      { minWeight: 7, maxWeight: 9, dose: 2.5, ageGuide: '3-6 months' },
+      { minWeight: 9, maxWeight: 11, dose: 2.5, ageGuide: '6-12 months' },
+      { minWeight: 11, maxWeight: 16, dose: 5, ageGuide: '1-3 years' },
+      { minWeight: 16, maxWeight: 21, dose: 7.5, ageGuide: '4-6 years' },
+      { minWeight: 21, maxWeight: 27, dose: 10, ageGuide: '7-9 years' },
+      { minWeight: 27, maxWeight: 40, dose: 15, ageGuide: '10-12 years' }
+    ]
+  },
+  { 
+    name: 'Amoxicillin Suspension (125mg/5ml)', 
+    generic: 'amoxicillin', 
+    concentration: '125mg/5ml', 
+    category: 'Antibiotic',
+    interval: 8,
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 15, dose: 5, ageGuide: '1-3 years' },
+      { minWeight: 15, maxWeight: 20, dose: 7.5, ageGuide: '3-6 years' },
+      { minWeight: 20, maxWeight: 30, dose: 10, ageGuide: '6-12 years' }
+    ]
+  },
+  { 
+    name: 'Amoxicillin Suspension (250mg/5ml)', 
+    generic: 'amoxicillin', 
+    concentration: '250mg/5ml', 
+    category: 'Antibiotic',
+    interval: 8,
+    dosageGuide: [
+      { minWeight: 20, maxWeight: 30, dose: 5, ageGuide: '6-12 years' },
+      { minWeight: 30, maxWeight: 40, dose: 7.5, ageGuide: '12+ years' }
+    ]
+  },
+  { 
+    name: 'Ventolin Inhaler (100mcg/puff)', 
+    generic: 'salbutamol', 
+    category: 'Asthma - Reliever', 
+    unit: 'puffs',
+    interval: 4,
+    dosageGuide: [
+      { minWeight: 0, maxWeight: 100, dose: 1, ageGuide: 'All ages', notes: '1-2 puffs as needed' }
+    ]
+  },
+  { 
+    name: 'Piriton Syrup (2mg/5ml)', 
+    generic: 'chlorphenamine', 
+    concentration: '2mg/5ml', 
+    category: 'Antihistamine',
+    interval: 6,
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 20, dose: 2.5, ageGuide: '1-2 years' },
+      { minWeight: 20, maxWeight: 30, dose: 2.5, ageGuide: '2-6 years' },
+      { minWeight: 30, maxWeight: 45, dose: 5, ageGuide: '6-12 years' }
+    ]
+  },
+  { 
+    name: 'Pinamox Suspension', 
+    generic: 'amoxicillin', 
+    concentration: '125mg/5ml', 
+    category: 'Antibiotic',
+    interval: 8,
+    dosageGuide: [
+      { minWeight: 10, maxWeight: 20, dose: 5, ageGuide: '1-6 years' },
+      { minWeight: 20, maxWeight: 30, dose: 10, ageGuide: '6-12 years' }
+    ]
+  },
+  { 
+    name: 'Disprol (120mg/5ml)', 
+    generic: 'paracetamol', 
+    concentration: '120mg/5ml', 
+    category: 'Antipyretic/Analgesic',
+    interval: 4,
+    dosageGuide: [
+      { minWeight: 8, maxWeight: 13, dose: 5, ageGuide: '3-12 months' },
+      { minWeight: 13, maxWeight: 21, dose: 10, ageGuide: '1-6 years' }
+    ]
+  }
+];
+
+/* ===========================
+   Icon Fallback System
+   =========================== */
+
+// Fallback if Lucide doesn't load
+if (typeof lucide === 'undefined') {
+  console.warn('Lucide icons not loaded, using emoji fallback');
+  window.lucide = {
+    createIcons: () => {
+      // Simple emoji fallback for common icons
+      document.querySelectorAll('[data-lucide]').forEach(el => {
+        const iconName = el.getAttribute('data-lucide');
+        const emojiMap = {
+          'thermometer': '🌡️',
+          'plus': '➕',
+          'user': '👤',
+          'trash-2': '🗑️',
+          'pill': '💊',
+          'file-plus': '📄',
+          'download': '⬇️',
+          'qr-code': '📷',
+          'share-2': '↗️',
+          'upload': '⬆️',
+          'bell': '🔔',
+          'alert-circle': '⚠️',
+          'x': '✖️',
+          'info': 'ℹ️',
+          'message-circle': '💬',
+          'copy': '📋',
+          'camera': '📷',
+          'scan-barcode': '📷',
+          'heart-pulse': '💓',
+          'alert-triangle': '⚠️',
+          'shield-check': '🛡️'
+        };
+        const emoji = emojiMap[iconName] || '•';
+        el.textContent = emoji;
+        el.style.display = 'inline';
+      });
+    }
+  };
+}
+
+/* ===========================
+   Storage
+   =========================== */
+
+const STORAGE_KEYS = {
+  children: 'dosed_children',
+  records: 'dosed_records',
+  prescriptions: 'dosed_prescriptions'
+};
+
+function loadData() {
+  const children = JSON.parse(localStorage.getItem(STORAGE_KEYS.children) || '[]');
+  const records = JSON.parse(localStorage.getItem(STORAGE_KEYS.records) || '[]');
+  const prescriptions = JSON.parse(localStorage.getItem(STORAGE_KEYS.prescriptions) || '[]');
+  return { children, records, prescriptions };
+}
+
+function saveData({ children, records, prescriptions }) {
+  localStorage.setItem(STORAGE_KEYS.children, JSON.stringify(children));
+  localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(records));
+  localStorage.setItem(STORAGE_KEYS.prescriptions, JSON.stringify(prescriptions));
+}
+
+let state = loadData();
+
+/* ===========================
+   Utilities
+   =========================== */
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('en-GB', { 
+    day: 'numeric', 
+    month: 'short', 
+    year: 'numeric',
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return (str || '').replace(/"/g, '&quot;');
+}
+
+function calculateNextDoseISO(frequency) {
+  const now = new Date();
+  const hoursToAdd = frequency === 'TDS' ? 8 : frequency === 'BD' ? 12 : frequency === 'QDS' ? 6 : 24;
+  now.setHours(now.getHours() + hoursToAdd);
+  return now.toISOString();
+}
+
+function getRecommendedDose(medName, weight) {
+  const med = MEDICINES.find(m => m.name === medName);
+  if (!med || !weight || !med.dosageGuide) return null;
+  
+  const w = parseFloat(weight);
+  const guide = med.dosageGuide.find(g => w >= g.minWeight && w <= g.maxWeight);
+  if (!guide) return null;
+  
+  return {
+    dose: guide.dose,
+    ageGuide: guide.ageGuide,
+    unit: med.unit || 'ml',
+    notes: guide.notes,
+    interval: med.interval || 4
+  };
+}
+
+/* ===========================
+   Clinical Validation Functions
+   =========================== */
+
+function validateVitalSign(type, value, ageMonths) {
+  if (!value || !ageMonths) return { valid: true, message: '' };
+  
+  const val = parseFloat(value);
+  const ranges = VITAL_RANGES[type];
+  if (!ranges) return { valid: true, message: '' };
+  
+  const ageRange = ranges.find(r => ageMonths >= r.minAge && ageMonths < r.maxAge);
+  if (!ageRange) return { valid: true, message: '' };
+  
+  const [normalMin, normalMax] = ageRange.normal;
+  
+  if (val < ageRange.low) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ CRITICALLY LOW for age (normal: ${normalMin}-${normalMax})`
+    };
+  } else if (val < normalMin) {
+    return {
+      valid: true,
+      severity: 'warning',
+      message: `⚠️ Below normal range (${normalMin}-${normalMax})`
+    };
+  } else if (val > ageRange.high) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ CRITICALLY HIGH for age (normal: ${normalMin}-${normalMax})`
+    };
+  } else if (val > normalMax) {
+    return {
+      valid: true,
+      severity: 'warning',
+      message: `⚠️ Above normal range (${normalMin}-${normalMax})`
+    };
+  }
+  
+  return {
+    valid: true,
+    severity: 'normal',
+    message: `✓ Normal range (${normalMin}-${normalMax})`
+  };
+}
+
+function validateWeight(weight, ageMonths) {
+  if (!weight || !ageMonths) return { valid: true, message: '' };
+  
+  const w = parseFloat(weight);
+  const [minExpected, maxExpected] = WEIGHT_ESTIMATES.getExpectedWeight(ageMonths);
+  
+  if (w < minExpected * 0.7) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ Significantly below expected range (${minExpected.toFixed(1)}-${maxExpected.toFixed(1)} kg)`
+    };
+  } else if (w < minExpected) {
+    return {
+      valid: true,
+      severity: 'warning',
+      message: `⚠️ Below expected range (${minExpected.toFixed(1)}-${maxExpected.toFixed(1)} kg)`
+    };
+  } else if (w > maxExpected * 1.3) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ Significantly above expected range (${minExpected.toFixed(1)}-${maxExpected.toFixed(1)} kg)`
+    };
+  } else if (w > maxExpected) {
+    return {
+      valid: true,
+      severity: 'warning',
+      message: `⚠️ Above expected range (${minExpected.toFixed(1)}-${maxExpected.toFixed(1)} kg)`
+    };
+  }
+  
+  return {
+    valid: true,
+    severity: 'normal',
+    message: `✓ Within expected range (${minExpected.toFixed(1)}-${maxExpected.toFixed(1)} kg)`
+  };
+}
+
+function validateMedicationDose(medication, dose, childAge, childWeight, recentDoses = []) {
+  const limits = MEDICATION_LIMITS[medication];
+  if (!limits) return { valid: true, message: '' };
+  
+  const doseVal = parseFloat(dose);
+  const ageMonths = parseFloat(childAge) * 12;
+  const weight = parseFloat(childWeight);
+  
+  // Age check
+  if (ageMonths < limits.minAge) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ CONTRAINDICATED: Child too young (minimum age: ${limits.minAge} months)`
+    };
+  }
+  
+  // Weight check
+  if (weight && weight < limits.minWeight) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ CONTRAINDICATED: Child too light (minimum weight: ${limits.minWeight} kg)`
+    };
+  }
+  
+  // Single dose check
+  if (doseVal > limits.maxSingleDose) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ EXCEEDS maximum single dose (max: ${limits.maxSingleDose}ml)`
+    };
+  }
+  
+  // Check recent doses in last 24 hours
+  const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+  const recentSameMed = recentDoses.filter(r => 
+    r.medication === medication && 
+    new Date(r.timestamp).getTime() > oneDayAgo
+  );
+  
+  if (recentSameMed.length >= limits.maxDailyDoses) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ MAXIMUM daily doses reached (${limits.maxDailyDoses} doses/24h)`
+    };
+  }
+  
+  // Check interval since last dose
+  if (recentSameMed.length > 0) {
+    const lastDose = recentSameMed.sort((a,b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    )[0];
+    const hoursSince = (Date.now() - new Date(lastDose.timestamp).getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSince < limits.minInterval) {
+      return {
+        valid: false,
+        severity: 'critical',
+        message: `⚠️ TOO SOON: Wait ${Math.ceil(limits.minInterval - hoursSince)} more hour(s) (minimum ${limits.minInterval}h between doses)`
+      };
+    }
+  }
+  
+  // Calculate total today
+  const totalToday = recentSameMed.reduce((sum, r) => sum + parseFloat(r.dose || 0), 0);
+  if (totalToday + doseVal > limits.maxDailyTotal) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ Would EXCEED daily maximum (${totalToday.toFixed(1)}ml + ${doseVal}ml > ${limits.maxDailyTotal}ml/24h)`
+    };
+  }
+  
+  return {
+    valid: true,
+    severity: 'normal',
+    message: `✓ Dose within safe limits`
+  };
+}
+
+/* ===========================
+   Active Medications Tracking
+   =========================== */
+
+function getActiveMedications(childId) {
+  const medRecords = state.records
+    .filter(r => r.childId === childId && r.medication)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  const activeMeds = [];
+  const seenMeds = new Set();
+  
+  for (const med of medRecords) {
+    if (!seenMeds.has(med.medication)) {
+      const hoursSince = (Date.now() - new Date(med.timestamp).getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 24) {
+        const medData = MEDICINES.find(m => m.name === med.medication);
+        const interval = medData?.interval || 4;
+        activeMeds.push({
+          name: med.medication,
+          timestamp: med.timestamp,
+          interval: interval
+        });
+      }
+      seenMeds.add(med.medication);
+    }
+  }
+  
+  return activeMeds;
+}
+
+/* ===========================
+   Reminders
+   =========================== */
+
+function checkReminders() {
+  const now = new Date();
+  const reminders = [];
+  
+  // Check prescriptions
+  state.prescriptions.forEach(p => {
+    if (p.nextDose) {
+      const next = new Date(p.nextDose);
+      const diff = next - now;
+      if (diff > 0 && diff < 15 * 60 * 1000) {
+        const child = state.children.find(c => c.id === p.childId);
+        reminders.push({
+          medication: p.medication,
+          childName: child ? child.name : 'Unknown',
+          minutesUntil: Math.max(0, Math.floor(diff / 60000))
+        });
+      }
+    }
+  });
+  
+  // Check active medications
+  state.children.forEach(child => {
+    const meds = getActiveMedications(child.id);
+    meds.forEach(med => {
+      const nextDose = new Date(new Date(med.timestamp).getTime() + (med.interval * 60 * 60 * 1000));
+      const diff = nextDose - now;
+      if (diff < 0 && diff > -30 * 60 * 1000) { // Overdue by less than 30 min
+        reminders.push({
+          medication: med.name,
+          childName: child.name,
+          minutesUntil: 'OVERDUE'
+        });
+      }
+    });
+  });
+
+  const banner = document.getElementById('reminderBanner');
+  const list = document.getElementById('remindersList');
+  if (reminders.length > 0) {
+    banner.classList.remove('hidden');
+    list.innerHTML = reminders.map(r => 
+      `${r.childName}: ${r.medication} ${r.minutesUntil === 'OVERDUE' ? '<span class="font-bold text-red-700">OVERDUE</span>' : `due in ${r.minutesUntil} minute(s)`}`
+    ).join('<br/>');
+  } else {
+    banner.classList.add('hidden');
+    list.innerHTML = '';
+  }
+}
+
+/* ===========================
+   Rendering
+   =========================== */
+
+function render() {
+  renderChildren();
+  checkReminders();
+  if (typeof lucide !== 'undefined') {
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+}
+
+function persistAndRender() {
+  saveData(state);
+  render();
+}
+
+function renderChildren() {
+  const grid = document.getElementById('childrenGrid');
+  if (state.children.length === 0) {
+    grid.innerHTML = '<div class="col-span-2 text-center text-gray-500 py-8">No children added yet. Click "Add Child" to get started.</div>';
+    return;
+  }
+  
+  grid.innerHTML = state.children.map(child => {
+    const records = getRecordsForChild(child.id);
+    const prescriptions = getPrescriptionsForChild(child.id);
+    const activeMeds = getActiveMedications(child.id);
+    
+    let medStatusHTML = '';
+    if (activeMeds.length > 0) {
+      medStatusHTML = activeMeds.map(med => {
+        const nextDose = new Date(new Date(med.timestamp).getTime() + (med.interval * 60 * 60 * 1000));
+        const isOverdue = nextDose < new Date();
+        const isDue = (nextDose - new Date()) < (30 * 60 * 1000);
+        const statusClass = isOverdue ? 'medication-status-overdue' : isDue ? 'medication-status-due' : 'bg-blue-50 border-l-4 border-blue-400';
+        
+        return `
+          <div class="${statusClass} p-2 rounded text-sm mt-2">
+            <div class="font-semibold">${escapeHtml(med.name)}</div>
+            <div class="text-xs text-gray-600">Last: ${formatDateTime(med.timestamp)}</div>
+            <div class="text-xs ${isOverdue ? 'text-red-700 font-bold' : 'text-blue-700'}">
+              ${isOverdue ? '🚨 OVERDUE' : isDue ? '⏰ Due soon' : `Next: ${nextDose.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}`}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    return `
+      <div class="border rounded-lg p-4 hover:shadow-md transition-shadow" id="child-${child.id}">
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <h3 class="text-lg font-bold">${escapeHtml(child.name)}</h3>
+            <div class="text-sm text-gray-600">Age: ${child.age || 'Not set'} ${child.weight ? `• ${child.weight} kg` : ''}</div>
+          </div>
+          <button class="btn-delete-child text-red-500 hover:text-red-700" data-id="${child.id}">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+        
+        ${child.conditions && child.conditions.length ? `
+          <div class="text-xs text-gray-600 mb-1">
+            <i data-lucide="heart-pulse" class="w-3 h-3 inline"></i> ${child.conditions.join(', ')}
+          </div>
+        ` : ''}
+        
+        ${child.allergies && child.allergies.length ? `
+          <div class="text-xs text-red-600 mb-1">
+            <i data-lucide="alert-triangle" class="w-3 h-3 inline"></i> Allergies: ${child.allergies.join(', ')}
+          </div>
+        ` : ''}
+        
+        ${child.regularMedications && child.regularMedications.length ? `
+          <div class="text-xs text-purple-600 mb-2">
+            <i data-lucide="pill" class="w-3 h-3 inline"></i> Regular: ${child.regularMedications.join(', ')}
+          </div>
+        ` : ''}
+        
+        ${medStatusHTML}
+        
+        ${prescriptions.length > 0 ? `
+          <div class="mt-3 pt-3 border-t">
+            <div class="text-xs font-semibold text-gray-700 mb-2">Active Prescriptions:</div>
+            ${prescriptions.map(p => `
+              <div class="bg-purple-50 p-2 rounded text-xs mb-1">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <div class="font-semibold">${escapeHtml(p.medication)}</div>
+                    <div class="text-gray-600">${p.dose}${p.unit||'ml'} ${p.frequency}</div>
+                    ${p.nextDose ? `<div class="text-xs text-purple-700">Next: ${formatDateTime(p.nextDose)}</div>` : ''}
+                  </div>
+                  <div class="flex gap-1">
+                    <button class="btn-record-dose bg-green-500 text-white px-2 py-1 rounded text-xs" data-prescription-id="${p.id}">Record</button>
+                    <button class="btn-delete-presc text-red-500" data-id="${p.id}">
+                      <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button class="btn-add-record bg-green-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1" data-id="${child.id}">
+            <i data-lucide="plus" class="w-3 h-3"></i> Add Record
+          </button>
+          <button class="btn-view-records bg-[#004680] text-white px-3 py-1 rounded text-sm" data-id="${child.id}">
+            View Records (${records.length})
+          </button>
+          <button class="btn-add-prescription bg-[#7B68A6] text-white px-3 py-1 rounded text-sm flex items-center gap-1" data-id="${child.id}">
+            <i data-lucide="file-plus" class="w-3 h-3"></i> Prescription
+          </button>
+          <button class="btn-edit-child bg-gray-500 text-white px-3 py-1 rounded text-sm" data-id="${child.id}">Edit</button>
+          <button class="btn-share-qr bg-purple-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1" data-id="${child.id}">
+            <i data-lucide="qr-code" class="w-3 h-3"></i> QR
+          </button>
+          <button class="btn-export bg-blue-500 text-white px-3 py-1 rounded text-sm flex items-center gap-1" data-id="${child.id}">
+            <i data-lucide="share-2" class="w-3 h-3"></i> Share
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  attachChildrenEvents();
+}
+
+function attachChildrenEvents() {
+  document.querySelectorAll('.btn-edit-child').forEach(b => b.onclick = e => {
+    const child = state.children.find(c => c.id === e.currentTarget.dataset.id);
+    if (child) openChildModal('edit', child);
+  });
+  document.querySelectorAll('.btn-delete-child').forEach(b => b.onclick = e => {
+    deleteChild(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-add-record').forEach(b => b.onclick = e => {
+    openRecordModal(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-view-records').forEach(b => b.onclick = e => {
+    openRecordsViewer(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-add-prescription').forEach(b => b.onclick = e => {
+    openPrescriptionModal(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-export').forEach(b => b.onclick = e => {
+    exportData(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-share-qr').forEach(b => b.onclick = e => {
+    shareDataQR(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-delete-presc').forEach(b => b.onclick = e => {
+    deletePrescription(e.currentTarget.dataset.id);
+  });
+  document.querySelectorAll('.btn-record-dose').forEach(b => b.onclick = e => {
+    recordDoseFromPrescription(e.currentTarget.dataset.prescriptionId);
+  });
+}
+
+/* ===========================
+   Child CRUD
+   =========================== */
+
+function addChild(child) {
+  console.log('Adding child:', child);
+  child.id = uid();
+  state.children.push(child);
+  console.log('State after adding:', state.children);
+  persistAndRender();
+}
+
+function updateChild(updated) {
+  state.children = state.children.map(c => c.id === updated.id ? updated : c);
+  persistAndRender();
+}
+
+function deleteChild(id) {
+  if (!confirm('Delete child and all associated data?')) return;
+  state.children = state.children.filter(c => c.id !== id);
+  state.records = state.records.filter(r => r.childId !== id);
+  state.prescriptions = state.prescriptions.filter(p => p.childId !== id);
+  persistAndRender();
+}
+
+/* ===========================
+   Records
+   =========================== */
+
+function addRecord(rec) {
+  rec.id = uid();
+  if (!rec.timestamp) {
+    rec.timestamp = new Date().toISOString();
+  }
+  state.records.unshift(rec);
+  
+  // Update prescription next dose if medication was from prescription
+  if (rec.prescriptionId) {
+    state.prescriptions = state.prescriptions.map(p => {
+      if (p.id === rec.prescriptionId) {
+        p.nextDose = calculateNextDoseISO(p.frequency);
+      }
+      return p;
+    });
+  }
+  
+  persistAndRender();
+}
+
+function deleteRecord(id) {
+  if (!confirm('Delete this record?')) return;
+  state.records = state.records.filter(r => r.id !== id);
+  persistAndRender();
+}
+
+function getRecordsForChild(childId) {
+  return state.records.filter(r => r.childId === childId).sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp));
+}
+
+/* ===========================
+   Prescriptions
+   =========================== */
+
+function addPrescription(presc) {
+  presc.id = uid();
+  presc.startDate = new Date().toISOString();
+  presc.nextDose = calculateNextDoseISO(presc.frequency);
+  state.prescriptions.push(presc);
+  persistAndRender();
+}
+
+function deletePrescription(id) {
+  if (!confirm('Delete prescription?')) return;
+  state.prescriptions = state.prescriptions.filter(p => p.id !== id);
+  persistAndRender();
+}
+
+function getPrescriptionsForChild(childId) {
+  return state.prescriptions.filter(p => p.childId === childId);
+}
+
+function recordDoseFromPrescription(prescId) {
+  const p = state.prescriptions.find(x => x.id === prescId);
+  if (!p) return alert('Prescription not found');
+  
+  const rec = {
+    childId: p.childId,
+    temperature: '',
+    symptoms: [],
+    medication: p.medication,
+    medicationGeneric: p.medicationGeneric,
+    dose: p.dose,
+    unit: p.unit || 'ml',
+    prescriptionId: p.id,
+    notes: 'Dose recorded from prescription',
+    timestamp: new Date().toISOString()
+  };
+  
+  addRecord(rec);
+  alert('Dose recorded and next dose scheduled.');
+}
+
+/* ===========================
+   Export
+   =========================== */
+
+function exportToCSV(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return '';
+  
+  const childRecords = getRecordsForChild(childId);
+  const childPresc = getPrescriptionsForChild(childId);
+  
+  let csv = 'Dosed Health Records Export\n';
+  csv += `Child: ${child.name}\n`;
+  csv += `Age: ${child.age || 'Not set'}\n`;
+  csv += `Weight: ${child.weight || 'Not set'} kg\n`;
+  csv += `Export Date: ${new Date().toLocaleString('en-GB')}\n\n`;
+  
+  // Records CSV
+  csv += 'HEALTH RECORDS\n';
+  csv += 'Date,Time,Temperature (°C),Symptoms,Medication,Dose,Unit,Heart Rate (bpm),Resp Rate (/min),Notes\n';
+  
+  childRecords.forEach(r => {
+    const date = new Date(r.timestamp);
+    csv += `${date.toLocaleDateString('en-GB')},`;
+    csv += `${date.toLocaleTimeString('en-GB')},`;
+    csv += `${r.temperature || ''},`;
+    csv += `"${(r.symptoms || []).join('; ')}",`;
+    csv += `${r.medication || ''},`;
+    csv += `${r.dose || ''},`;
+    csv += `${r.unit || ''},`;
+    csv += `${r.heartRate || ''},`;
+    csv += `${r.respRate || ''},`;
+    csv += `"${(r.notes || '').replace(/"/g, '""')}"\n`;
+  });
+  
+  // Prescriptions CSV
+  csv += '\nPRESCRIPTIONS\n';
+  csv += 'Medication,Dose,Unit,Frequency,Duration (days),Start Date\n';
+  
+  childPresc.forEach(p => {
+    csv += `${p.medication},`;
+    csv += `${p.dose},`;
+    csv += `${p.unit || 'ml'},`;
+    csv += `${p.frequency},`;
+    csv += `${p.duration || ''},`;
+    csv += `${p.startDate ? new Date(p.startDate).toLocaleDateString('en-GB') : ''}\n`;
+  });
+  
+  return csv;
+}
+
+function downloadCSV(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const csv = exportToCSV(childId);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `dosed-${child.name.replace(/\s+/g, '_')}-${new Date().toISOString().slice(0,10)}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function clearAllData() {
+  const totalChildren = state.children.length;
+  const totalRecords = state.records.length;
+  const totalPrescriptions = state.prescriptions.length;
+  
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold text-red-600">⚠️ Clear All Data</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <div class="space-y-4">
+      <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+        <div class="flex items-start">
+          <i data-lucide="alert-triangle" class="text-red-600 mr-3 mt-1"></i>
+          <div>
+            <h4 class="font-bold text-red-900 mb-2">WARNING: This action cannot be undone!</h4>
+            <p class="text-red-800 text-sm">You are about to permanently delete:</p>
+            <ul class="list-disc list-inside text-red-700 text-sm mt-2">
+              <li><strong>${totalChildren}</strong> child profile(s)</li>
+              <li><strong>${totalRecords}</strong> health record(s)</li>
+              <li><strong>${totalPrescriptions}</strong> prescription(s)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-blue-50 p-4 rounded">
+        <h4 class="font-semibold text-blue-900 mb-2">📥 Export Before Deleting (Recommended)</h4>
+        <p class="text-sm text-blue-800 mb-3">Download a backup of all your data as CSV files:</p>
+        <div id="exportButtons" class="space-y-2">
+          ${state.children.map(child => `
+            <button class="btn-export-csv w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center gap-2" data-id="${child.id}">
+              <i data-lucide="download"></i> Export ${escapeHtml(child.name)}'s Data
+            </button>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="bg-gray-100 p-4 rounded">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" id="confirmDelete" class="mt-1">
+          <span class="text-sm text-gray-700">
+            I understand this will <strong>permanently delete all data</strong> and I have exported any data I wish to keep.
+          </span>
+        </label>
+      </div>
+      
+      <div class="flex gap-2">
+        <button id="btnConfirmClear" class="flex-1 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          🗑️ Delete Everything
+        </button>
+        <button class="btn-modal-close flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  // Enable export buttons
+  setTimeout(() => {
+    document.querySelectorAll('.btn-export-csv').forEach(btn => {
+      btn.onclick = (e) => {
+        downloadCSV(e.currentTarget.dataset.id);
+        e.currentTarget.innerHTML = '<i data-lucide="check"></i> Downloaded!';
+        e.currentTarget.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        e.currentTarget.classList.add('bg-green-600');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      };
+    });
+    
+    // Enable delete button when checkbox is checked
+    document.getElementById('confirmDelete').onchange = (e) => {
+      document.getElementById('btnConfirmClear').disabled = !e.target.checked;
+    };
+    
+    // Delete button
+    document.getElementById('btnConfirmClear').onclick = () => {
+      // Final confirmation
+      const finalConfirm = confirm(
+        `FINAL CONFIRMATION\n\n` +
+        `Type "DELETE" to confirm you want to permanently erase all data.\n\n` +
+        `This will delete:\n` +
+        `• ${totalChildren} children\n` +
+        `• ${totalRecords} records\n` +
+        `• ${totalPrescriptions} prescriptions\n\n` +
+        `Are you absolutely sure?`
+      );
+      
+      if (finalConfirm) {
+        // Clear all data
+        state.children = [];
+        state.records = [];
+        state.prescriptions = [];
+        persistAndRender();
+        closeModal();
+        alert('✓ All data has been cleared.');
+      }
+    };
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }, 100);
+}
+
+function exportData(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const childRecords = getRecordsForChild(childId);
+  const childPresc = getPrescriptionsForChild(childId);
+  const activeMeds = getActiveMedications(childId);
+
+  let text = `*DOSED - MEDICAL SUMMARY*\n\n`;
+  text += `*Child:* ${child.name}\n`;
+  text += `*Age:* ${child.age || 'Not set'}\n`;
+  if (child.weight) text += `*Weight:* ${child.weight} kg\n`;
+  
+  if (child.conditions && child.conditions.length) {
+    text += `*Conditions:* ${child.conditions.join(', ')}\n`;
+  }
+  if (child.allergies && child.allergies.length) {
+    text += `*⚠️ Allergies:* ${child.allergies.join(', ')}\n`;
+  }
+  
+  if (activeMeds.length > 0) {
+    text += `\n*💊 ACTIVE MEDICATIONS (Last 24h):*\n`;
+    activeMeds.forEach(med => {
+      const nextDose = new Date(new Date(med.timestamp).getTime() + (med.interval * 60 * 60 * 1000));
+      text += `• ${med.name}\n`;
+      text += `  Last: ${formatDateTime(med.timestamp)}\n`;
+      text += `  Next: ${formatDateTime(nextDose.toISOString())}\n`;
+    });
+  }
+  
+  if (childPresc.length > 0) {
+    text += `\n*📋 CURRENT PRESCRIPTIONS:*\n`;
+    childPresc.forEach(p => {
+      text += `• ${p.medication} (${p.medicationGeneric || ''})\n`;
+      text += `  Dose: ${p.dose}${p.unit||'ml'} ${p.frequency}\n`;
+      if (p.nextDose) text += `  Next: ${formatDateTime(p.nextDose)}\n`;
+    });
+  }
+  
+  text += `\n*RECENT RECORDS:*\n\n`;
+  childRecords.slice(0, 15).forEach(r => {
+    text += `📅 ${formatDateTime(r.timestamp)}\n`;
+    if (r.temperature) text += `🌡️ ${r.temperature}°C\n`;
+    if (r.symptoms && r.symptoms.length) text += `Symptoms: ${r.symptoms.join(', ')}\n`;
+    if (r.medication) text += `💊 ${r.medication}: ${r.dose}${r.unit||'ml'}\n`;
+    if (r.heartRate) text += `❤️ ${r.heartRate} bpm\n`;
+    if (r.respRate) text += `🫁 ${r.respRate}/min\n`;
+    if (r.notes) text += `📝 ${r.notes}\n`;
+    text += `\n`;
+  });
+
+  // WhatsApp share
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank');
+}
+
+/* ===========================
+   Modals
+   =========================== */
+
+function openModal(html, onClose) {
+  const backdrop = document.getElementById('modalBackdrop');
+  const modal = document.getElementById('modal');
+  modal.innerHTML = html;
+  backdrop.classList.remove('hidden');
+  backdrop.classList.add('flex');
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
+  modal.querySelectorAll('.btn-modal-close').forEach(b => b.onclick = () => closeModal(onClose));
+}
+
+function closeModal(onClose) {
+  const backdrop = document.getElementById('modalBackdrop');
+  backdrop.classList.add('hidden');
+  backdrop.classList.remove('flex');
+  if (typeof onClose === 'function') onClose();
+}
+
+function openChildModal(mode='add', child = null) {
+  const isEdit = mode === 'edit';
+  const name = isEdit ? child.name : '';
+  const age = isEdit ? child.age : '';
+  const weight = isEdit ? child.weight : '';
+  const conditions = isEdit && child.conditions ? child.conditions.join(', ') : '';
+  const allergies = isEdit && child.allergies ? child.allergies.join(', ') : '';
+  const regularMedications = isEdit && child.regularMedications ? child.regularMedications.join(', ') : '';
+  const birthDate = isEdit && child.birthDate ? child.birthDate : '';
+
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">${isEdit ? 'Edit' : 'Add'} Child</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="space-y-3">
+      <label class="block">
+        <span class="text-sm font-medium">Name *</span>
+        <input id="ch_name" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(name)}">
+      </label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-sm font-medium">Age (years)</span>
+          <input id="ch_age" type="number" min="0" max="18" step="0.1" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(age)}">
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Weight (kg)</span>
+          <input id="ch_weight" type="number" min="0" step="0.1" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(weight)}">
+          <div id="weightValidation" class="text-xs mt-1 hidden"></div>
+        </label>
+      </div>
+      <label class="block">
+        <span class="text-sm font-medium">Birth Date</span>
+        <input id="ch_birthDate" type="date" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(birthDate)}">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Medical Conditions <span class="text-gray-500">(comma separated)</span></span>
+        <input id="ch_conditions" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(conditions)}">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Allergies <span class="text-gray-500">(comma separated)</span></span>
+        <input id="ch_allergies" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(allergies)}">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Regular Medications <span class="text-gray-500">(comma separated)</span></span>
+        <input id="ch_regularMedications" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(regularMedications)}">
+      </label>
+      <div class="flex gap-2 pt-4">
+        <button id="btnSaveChild" class="flex-1 bg-[#004680] text-white px-4 py-2 rounded hover:bg-[#003a6b]">
+          ${isEdit ? 'Update' : 'Add'} Child
+        </button>
+        <button class="btn-modal-close flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  // Weight validation
+  const validateWeightInput = () => {
+    const ageInput = document.getElementById('ch_age');
+    const weightInput = document.getElementById('ch_weight');
+    const validationDiv = document.getElementById('weightValidation');
+    
+    const age = parseFloat(ageInput.value);
+    const weight = parseFloat(weightInput.value);
+    
+    if (!age || !weight) {
+      validationDiv.classList.add('hidden');
+      return;
+    }
+    
+    const ageMonths = age * 12;
+    const validation = validateWeight(weight, ageMonths);
+    
+    if (validation.severity === 'critical') {
+      validationDiv.className = 'text-xs mt-1 text-red-600 font-semibold';
+      weightInput.classList.add('border-red-500');
+      weightInput.classList.remove('border-green-500', 'border-orange-500');
+    } else if (validation.severity === 'warning') {
+      validationDiv.className = 'text-xs mt-1 text-orange-600';
+      weightInput.classList.add('border-orange-500');
+      weightInput.classList.remove('border-red-500', 'border-green-500');
+    } else {
+      validationDiv.className = 'text-xs mt-1 text-green-600';
+      weightInput.classList.add('border-green-500');
+      weightInput.classList.remove('border-red-500', 'border-orange-500');
+    }
+    
+    validationDiv.textContent = validation.message;
+    validationDiv.classList.remove('hidden');
+  };
+  
+  document.getElementById('ch_age').oninput = validateWeightInput;
+  document.getElementById('ch_weight').oninput = validateWeightInput;
+  
+  // Trigger initial validation if editing
+  if (isEdit && age && weight) {
+    setTimeout(validateWeightInput, 100);
+  }
+  
+  document.getElementById('btnSaveChild').onclick = () => {
+    const childData = {
+      name: document.getElementById('ch_name').value.trim(),
+      age: document.getElementById('ch_age').value.trim(),
+      weight: document.getElementById('ch_weight').value.trim(),
+      birthDate: document.getElementById('ch_birthDate').value.trim(),
+      conditions: document.getElementById('ch_conditions').value.split(',').map(s => s.trim()).filter(Boolean),
+      allergies: document.getElementById('ch_allergies').value.split(',').map(s => s.trim()).filter(Boolean),
+      regularMedications: document.getElementById('ch_regularMedications').value.split(',').map(s => s.trim()).filter(Boolean)
+    };
+    
+    if (!childData.name) return alert('Please enter a name');
+    
+    if (isEdit) {
+      childData.id = child.id;
+      updateChild(childData);
+    } else {
+      addChild(childData);
+    }
+    
+    closeModal();
+  };
+}
+
+function openRecordModal(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const prescriptions = getPrescriptionsForChild(childId);
+  
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Add Record for ${escapeHtml(child.name)}</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <!-- Time Selection -->
+    <div class="mb-4">
+      <label class="text-sm font-medium mb-2 block">When was this recorded?</label>
+      <div class="flex gap-2">
+        <button id="timeNow" class="time-btn active flex-1 px-4 py-2 rounded border-2 border-gray-300">Now</button>
+        <button id="timeCustom" class="time-btn flex-1 px-4 py-2 rounded border-2 border-gray-300">Custom Time</button>
+      </div>
+      <input type="datetime-local" id="customTimestamp" class="hidden mt-2 w-full border rounded px-3 py-2">
+    </div>
+    
+    <div class="space-y-3">
+      <!-- Vital Signs Section (grouped) -->
+      <div class="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
+        <h4 class="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+          <i data-lucide="activity" class="w-4 h-4"></i> Vital Signs
+        </h4>
+        <div class="grid grid-cols-3 gap-3">
+          <label class="block">
+            <span class="text-sm font-medium">Temp (°C)</span>
+            <input id="rec_temp" type="number" step="0.1" min="35" max="42" class="mt-1 block w-full border rounded px-3 py-2" placeholder="37.5">
+            <div id="tempValidation" class="text-xs mt-1 hidden"></div>
+          </label>
+          <label class="block">
+            <span class="text-sm font-medium">HR (bpm)</span>
+            <input id="rec_hr" type="number" min="0" max="300" class="mt-1 block w-full border rounded px-3 py-2" placeholder="120">
+            <div id="hrValidation" class="text-xs mt-1 hidden"></div>
+          </label>
+          <label class="block">
+            <span class="text-sm font-medium">RR (/min)</span>
+            <input id="rec_rr" type="number" min="0" max="100" class="mt-1 block w-full border rounded px-3 py-2" placeholder="25">
+            <div id="rrValidation" class="text-xs mt-1 hidden"></div>
+          </label>
+        </div>
+        <div class="text-xs text-blue-700 mt-2">
+          <i data-lucide="info" class="w-3 h-3 inline"></i> Values will be checked against age-appropriate clinical ranges
+        </div>
+      </div>
+      
+      <div>
+        <span class="text-sm font-medium block mb-2">Symptoms (click to select)</span>
+        <div id="symptomTags" class="flex flex-wrap gap-2">
+          ${COMMON_SYMPTOMS.map(s => `<span class="symptom-tag px-3 py-1 rounded-full cursor-pointer bg-gray-200 hover:bg-indigo-200" data-symptom="${s}">${s}</span>`).join('')}
+        </div>
+      </div>
+      
+      ${prescriptions.length > 0 ? `
+        <div class="bg-purple-50 p-3 rounded border-2 border-purple-200">
+          <label class="block">
+            <span class="text-sm font-medium">Quick-fill from Prescription</span>
+            <select id="quickFillPresc" class="mt-1 block w-full border rounded px-3 py-2">
+              <option value="">-- Select prescription --</option>
+              ${prescriptions.map(p => `<option value="${p.id}">${p.medication} - ${p.dose}${p.unit||'ml'}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+      ` : ''}
+      
+      <label class="block">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium">Medication</span>
+          <button id="btnScanBarcode" type="button" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded flex items-center gap-1 hover:bg-purple-200">
+            <i data-lucide="scan-barcode" class="w-3 h-3"></i> Scan Barcode
+          </button>
+        </div>
+        <select id="rec_med" class="mt-1 block w-full border rounded px-3 py-2">
+          <option value="">-- Select medication --</option>
+          ${MEDICINES.map(m => `<option value="${m.name}">${m.name} (${m.generic})</option>`).join('')}
+        </select>
+      </label>
+      
+      <!-- Barcode Scanner Modal (hidden by default) -->
+      <div id="barcodeScannerModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-4 max-w-md w-full mx-4">
+          <div class="flex justify-between items-center mb-3">
+            <h4 class="font-semibold">Scan Medicine Barcode</h4>
+            <button id="closeBarcodeScanner" class="text-gray-500 hover:text-gray-700">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+          <div class="relative bg-black rounded overflow-hidden" style="aspect-ratio: 4/3;">
+            <video id="barcodeVideo" class="w-full h-full object-cover"></video>
+            <div id="scanningOverlay" class="absolute inset-0 flex items-center justify-center">
+              <div class="w-64 h-48 border-2 border-green-400 rounded-lg"></div>
+            </div>
+          </div>
+          <div id="barcodeResult" class="mt-3 hidden">
+            <div class="bg-green-50 border border-green-200 rounded p-3">
+              <div class="text-sm font-medium text-green-800">Barcode Detected:</div>
+              <div id="barcodeValue" class="text-lg font-bold text-green-900 mt-1"></div>
+              <div id="medicineMatch" class="text-sm text-green-700 mt-2"></div>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-gray-600">
+            <p>Position the barcode within the frame. Common locations on medicine bottles:</p>
+            <ul class="list-disc list-inside mt-1">
+              <li>Bottom of bottle</li>
+              <li>Back label</li>
+              <li>Side of box</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <div id="doseRecommendation" class="hidden bg-blue-50 p-3 rounded">
+        <div class="text-sm font-medium mb-1">Recommended Dose:</div>
+        <div id="doseText" class="text-blue-900 font-semibold"></div>
+      </div>
+      
+      <div id="doseValidation" class="hidden"></div>
+      
+      <div class="grid grid-cols-3 gap-2">
+        <label class="col-span-2 block">
+          <span class="text-sm font-medium">Dose</span>
+          <input id="rec_dose" type="number" step="0.1" class="mt-1 block w-full border rounded px-3 py-2">
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Unit</span>
+          <select id="rec_unit" class="mt-1 block w-full border rounded px-3 py-2">
+            <option value="ml">ml</option>
+            <option value="mg">mg</option>
+            <option value="puffs">puffs</option>
+            <option value="tablets">tablets</option>
+          </select>
+        </label>
+      </div>
+      
+      <label class="block">
+        <span class="text-sm font-medium">Notes</span>
+        <textarea id="rec_notes" rows="2" class="mt-1 block w-full border rounded px-3 py-2"></textarea>
+      </label>
+      
+      <div class="flex gap-2 pt-4">
+        <button id="btnSaveRecord" class="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          Save Record
+        </button>
+        <button class="btn-modal-close flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  // Initialize barcode scanner
+  initBarcodeScanner();
+  
+  // Time selection
+  let timeMode = 'now';
+  document.getElementById('timeNow').onclick = () => {
+    timeMode = 'now';
+    document.getElementById('timeNow').classList.add('active');
+    document.getElementById('timeCustom').classList.remove('active');
+    document.getElementById('customTimestamp').classList.add('hidden');
+  };
+  document.getElementById('timeCustom').onclick = () => {
+    timeMode = 'custom';
+    document.getElementById('timeCustom').classList.add('active');
+    document.getElementById('timeNow').classList.remove('active');
+    const input = document.getElementById('customTimestamp');
+    input.classList.remove('hidden');
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    input.value = now.toISOString().slice(0, 16);
+  };
+  
+  // Symptom selection
+  const selectedSymptoms = [];
+  document.querySelectorAll('.symptom-tag').forEach(tag => {
+    tag.onclick = () => {
+      const symptom = tag.dataset.symptom;
+      if (selectedSymptoms.includes(symptom)) {
+        selectedSymptoms.splice(selectedSymptoms.indexOf(symptom), 1);
+        tag.classList.remove('bg-[#004680]', 'text-white');
+        tag.classList.add('bg-gray-200');
+      } else {
+        selectedSymptoms.push(symptom);
+        tag.classList.add('bg-[#004680]', 'text-white');
+        tag.classList.remove('bg-gray-200');
+      }
+    };
+  });
+  
+  // Quick-fill from prescription
+  if (prescriptions.length > 0) {
+    document.getElementById('quickFillPresc').onchange = (e) => {
+      const prescId = e.target.value;
+      if (!prescId) return;
+      const presc = prescriptions.find(p => p.id === prescId);
+      if (presc) {
+        document.getElementById('rec_med').value = presc.medication;
+        document.getElementById('rec_dose').value = presc.dose;
+        document.getElementById('rec_unit').value = presc.unit || 'ml';
+        document.getElementById('rec_med').dispatchEvent(new Event('change'));
+      }
+    };
+  }
+  
+  // Dose recommendation
+  document.getElementById('rec_med').onchange = (e) => {
+    const medName = e.target.value;
+    if (!medName || !child.weight) {
+      document.getElementById('doseRecommendation').classList.add('hidden');
+      document.getElementById('doseValidation').classList.add('hidden');
+      return;
+    }
+    
+    const rec = getRecommendedDose(medName, child.weight);
+    if (rec) {
+      document.getElementById('doseText').innerHTML = `
+        <div>${rec.dose} ${rec.unit} (${rec.ageGuide})</div>
+        <div class="text-sm mt-1">Give every ${rec.interval} hours</div>
+        ${rec.notes ? `<div class="text-xs mt-1 text-gray-600">${rec.notes}</div>` : ''}
+        <button id="useDose" class="mt-2 bg-[#004680] text-white px-3 py-1 rounded text-sm">Use This Dose</button>
+      `;
+      document.getElementById('doseRecommendation').classList.remove('hidden');
+      
+      document.getElementById('useDose').onclick = () => {
+        document.getElementById('rec_dose').value = rec.dose;
+        document.getElementById('rec_unit').value = rec.unit;
+        // Trigger dose validation
+        document.getElementById('rec_dose').dispatchEvent(new Event('input'));
+      };
+    } else {
+      document.getElementById('doseRecommendation').classList.add('hidden');
+    }
+  };
+  
+  // Real-time vital sign validation
+  const ageMonths = (parseFloat(child.age) || 0) * 12;
+  
+  document.getElementById('rec_temp').oninput = (e) => {
+    const temp = e.target.value;
+    if (!temp) {
+      document.getElementById('tempValidation').classList.add('hidden');
+      return;
+    }
+    const t = parseFloat(temp);
+    const validationDiv = document.getElementById('tempValidation');
+    
+    if (t < 35) {
+      validationDiv.className = 'text-xs mt-1 text-red-600';
+      validationDiv.textContent = '⚠️ Hypothermia';
+    } else if (t > 42) {
+      validationDiv.className = 'text-xs mt-1 text-red-600';
+      validationDiv.textContent = '⚠️ Hyperthermia';
+    } else if (t >= 38) {
+      validationDiv.className = 'text-xs mt-1 text-orange-600';
+      validationDiv.textContent = '⚠️ Fever';
+    } else {
+      validationDiv.className = 'text-xs mt-1 text-green-600';
+      validationDiv.textContent = '✓ Normal';
+    }
+    validationDiv.classList.remove('hidden');
+  };
+  
+  document.getElementById('rec_hr').oninput = (e) => {
+    const hr = e.target.value;
+    if (!hr || !ageMonths) {
+      document.getElementById('hrValidation').classList.add('hidden');
+      return;
+    }
+    const validation = validateVitalSign('heartRate', hr, ageMonths);
+    const validationDiv = document.getElementById('hrValidation');
+    
+    if (validation.severity === 'critical') {
+      validationDiv.className = 'text-xs mt-1 text-red-600 font-semibold';
+    } else if (validation.severity === 'warning') {
+      validationDiv.className = 'text-xs mt-1 text-orange-600';
+    } else {
+      validationDiv.className = 'text-xs mt-1 text-green-600';
+    }
+    validationDiv.textContent = validation.message;
+    validationDiv.classList.remove('hidden');
+  };
+  
+  document.getElementById('rec_rr').oninput = (e) => {
+    const rr = e.target.value;
+    if (!rr || !ageMonths) {
+      document.getElementById('rrValidation').classList.add('hidden');
+      return;
+    }
+    const validation = validateVitalSign('respiratoryRate', rr, ageMonths);
+    const validationDiv = document.getElementById('rrValidation');
+    
+    if (validation.severity === 'critical') {
+      validationDiv.className = 'text-xs mt-1 text-red-600 font-semibold';
+    } else if (validation.severity === 'warning') {
+      validationDiv.className = 'text-xs mt-1 text-orange-600';
+    } else {
+      validationDiv.className = 'text-xs mt-1 text-green-600';
+    }
+    validationDiv.textContent = validation.message;
+    validationDiv.classList.remove('hidden');
+  };
+  
+  // Real-time medication dose validation
+  document.getElementById('rec_dose').oninput = () => {
+    const medication = document.getElementById('rec_med').value;
+    const dose = document.getElementById('rec_dose').value;
+    
+    if (!medication || !dose) {
+      document.getElementById('doseValidation').classList.add('hidden');
+      return;
+    }
+    
+    const childRecords = getRecordsForChild(childId);
+    const validation = validateMedicationDose(medication, dose, child.age, child.weight, childRecords);
+    const validationDiv = document.getElementById('doseValidation');
+    
+    if (validation.severity === 'critical') {
+      validationDiv.className = 'bg-red-50 border-l-4 border-red-500 p-3 rounded';
+      validationDiv.innerHTML = `<div class="text-sm text-red-800 font-semibold">${validation.message}</div>`;
+    } else if (validation.severity === 'warning') {
+      validationDiv.className = 'bg-orange-50 border-l-4 border-orange-500 p-3 rounded';
+      validationDiv.innerHTML = `<div class="text-sm text-orange-800">${validation.message}</div>`;
+    } else if (validation.message) {
+      validationDiv.className = 'bg-green-50 border-l-4 border-green-500 p-3 rounded';
+      validationDiv.innerHTML = `<div class="text-sm text-green-800">${validation.message}</div>`;
+    }
+    validationDiv.classList.remove('hidden');
+  };
+  
+  // Save record
+  document.getElementById('btnSaveRecord').onclick = () => {
+    const timestamp = timeMode === 'custom' ? 
+      new Date(document.getElementById('customTimestamp').value).toISOString() :
+      new Date().toISOString();
+    
+    const medication = document.getElementById('rec_med').value;
+    const medObj = medication ? MEDICINES.find(m => m.name === medication) : null;
+    
+    const rec = {
+      childId: childId,
+      timestamp: timestamp,
+      temperature: document.getElementById('rec_temp').value,
+      symptoms: selectedSymptoms,
+      medication: medication,
+      medicationGeneric: medObj ? medObj.generic : '',
+      dose: document.getElementById('rec_dose').value,
+      unit: document.getElementById('rec_unit').value,
+      heartRate: document.getElementById('rec_hr').value,
+      respRate: document.getElementById('rec_rr').value,
+      notes: document.getElementById('rec_notes').value
+    };
+    
+    addRecord(rec);
+    closeModal();
+  };
+}
+
+function openPrescriptionModal(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Add Prescription for ${escapeHtml(child.name)}</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="space-y-3">
+      <label class="block">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium">Medication</span>
+          <button id="btnScanBarcodePresc" type="button" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded flex items-center gap-1 hover:bg-purple-200">
+            <i data-lucide="scan-barcode" class="w-3 h-3"></i> Scan Barcode
+          </button>
+        </div>
+        <select id="presc_med" class="mt-1 block w-full border rounded px-3 py-2">
+          <option value="">-- Select medication --</option>
+          ${MEDICINES.map(m => `<option value="${m.name}">${m.name} (${m.generic})</option>`).join('')}
+        </select>
+      </label>
+      
+      <!-- Barcode Scanner Modal for Prescription -->
+      <div id="barcodeScannerModalPresc" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-4 max-w-md w-full mx-4">
+          <div class="flex justify-between items-center mb-3">
+            <h4 class="font-semibold">Scan Medicine Barcode</h4>
+            <button id="closeBarcodeScannerPresc" class="text-gray-500 hover:text-gray-700">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+          <div class="relative bg-black rounded overflow-hidden" style="aspect-ratio: 4/3;">
+            <video id="barcodeVideoPresc" class="w-full h-full object-cover"></video>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="w-64 h-48 border-2 border-green-400 rounded-lg"></div>
+            </div>
+          </div>
+          <div id="barcodeResultPresc" class="mt-3 hidden">
+            <div class="bg-green-50 border border-green-200 rounded p-3">
+              <div class="text-sm font-medium text-green-800">Barcode Detected:</div>
+              <div id="barcodeValuePresc" class="text-lg font-bold text-green-900 mt-1"></div>
+              <div id="medicineMatchPresc" class="text-sm text-green-700 mt-2"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div id="prescDoseRec" class="hidden bg-blue-50 p-3 rounded">
+        <div class="text-sm font-medium mb-1">Recommended Dose:</div>
+        <div id="prescDoseText" class="text-blue-900 font-semibold"></div>
+      </div>
+      
+      <div class="grid grid-cols-3 gap-2">
+        <label class="col-span-2 block">
+          <span class="text-sm font-medium">Dose</span>
+          <input id="presc_dose" type="number" step="0.1" class="mt-1 block w-full border rounded px-3 py-2">
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Unit</span>
+          <select id="presc_unit" class="mt-1 block w-full border rounded px-3 py-2">
+            <option value="ml">ml</option>
+            <option value="mg">mg</option>
+            <option value="puffs">puffs</option>
+            <option value="tablets">tablets</option>
+          </select>
+        </label>
+      </div>
+      
+      <label class="block">
+        <span class="text-sm font-medium">Frequency</span>
+        <select id="presc_freq" class="mt-1 block w-full border rounded px-3 py-2">
+          <option value="OD">OD (Once daily)</option>
+          <option value="BD">BD (Twice daily)</option>
+          <option value="TDS">TDS (Three times daily)</option>
+          <option value="QDS">QDS (Four times daily)</option>
+        </select>
+      </label>
+      
+      <label class="block">
+        <span class="text-sm font-medium">Duration (days)</span>
+        <input id="presc_duration" type="number" class="mt-1 block w-full border rounded px-3 py-2" placeholder="7">
+      </label>
+      
+      <div class="flex gap-2 pt-4">
+        <button id="btnSavePresc" class="flex-1 bg-[#7B68A6] text-white px-4 py-2 rounded hover:bg-[#6958955]">
+          Add Prescription
+        </button>
+        <button class="btn-modal-close flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  // Initialize barcode scanner for prescription
+  initBarcodeScannerForElement('btnScanBarcodePresc', 'barcodeScannerModalPresc', 'closeBarcodeScannerPresc', 'barcodeVideoPresc', 'barcodeResultPresc', 'barcodeValuePresc', 'medicineMatchPresc', 'presc_med');
+  
+  // Dose recommendation
+  document.getElementById('presc_med').onchange = (e) => {
+    const medName = e.target.value;
+    if (!medName || !child.weight) {
+      document.getElementById('prescDoseRec').classList.add('hidden');
+      return;
+    }
+    
+    const rec = getRecommendedDose(medName, child.weight);
+    if (rec) {
+      document.getElementById('prescDoseText').innerHTML = `
+        <div>${rec.dose} ${rec.unit} (${rec.ageGuide})</div>
+        <button id="usePrescDose" class="mt-2 bg-[#004680] text-white px-3 py-1 rounded text-sm">Use This Dose</button>
+      `;
+      document.getElementById('prescDoseRec').classList.remove('hidden');
+      
+      document.getElementById('usePrescDose').onclick = () => {
+        document.getElementById('presc_dose').value = rec.dose;
+        document.getElementById('presc_unit').value = rec.unit;
+      };
+    } else {
+      document.getElementById('prescDoseRec').classList.add('hidden');
+    }
+  };
+  
+  document.getElementById('btnSavePresc').onclick = () => {
+    const medication = document.getElementById('presc_med').value;
+    const medObj = MEDICINES.find(m => m.name === medication);
+    
+    const presc = {
+      childId: childId,
+      medication: medication,
+      medicationGeneric: medObj ? medObj.generic : '',
+      dose: document.getElementById('presc_dose').value,
+      unit: document.getElementById('presc_unit').value,
+      frequency: document.getElementById('presc_freq').value,
+      duration: document.getElementById('presc_duration').value
+    };
+    
+    if (!presc.medication || !presc.dose) return alert('Please fill in required fields');
+    
+    addPrescription(presc);
+    closeModal();
+  };
+}
+
+function openRecordsViewer(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const records = getRecordsForChild(childId);
+  
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Records for ${escapeHtml(child.name)}</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <div class="space-y-3 max-h-[60vh] overflow-y-auto">
+      ${records.length === 0 ? '<p class="text-gray-500 text-center py-8">No records yet</p>' : 
+        records.map(r => `
+          <div class="border rounded p-3 ${r.medication ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-blue-500'}">
+            <div class="flex justify-between items-start mb-2">
+              <div class="text-sm text-gray-600">${formatDateTime(r.timestamp)}</div>
+              <button class="btn-delete-record text-red-500 hover:text-red-700" data-id="${r.id}">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+            ${r.temperature ? `<div class="text-lg font-semibold">🌡️ ${r.temperature}°C</div>` : ''}
+            ${r.symptoms && r.symptoms.length ? `<div class="text-sm text-gray-700 mt-1">Symptoms: ${r.symptoms.join(', ')}</div>` : ''}
+            ${r.medication ? `<div class="text-sm text-green-700 mt-1">💊 ${r.medication} - ${r.dose}${r.unit}</div>` : ''}
+            ${r.heartRate ? `<div class="text-sm text-gray-700 mt-1">❤️ ${r.heartRate} bpm</div>` : ''}
+            ${r.respRate ? `<div class="text-sm text-gray-700 mt-1">🫁 ${r.respRate}/min</div>` : ''}
+            ${r.notes ? `<div class="text-sm text-gray-600 mt-2 italic">${escapeHtml(r.notes)}</div>` : ''}
+          </div>
+        `).join('')
+      }
+    </div>
+    
+    <div class="mt-4 pt-4 border-t">
+      <button class="btn-modal-close w-full bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
+        Close
+      </button>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  document.querySelectorAll('.btn-delete-record').forEach(b => {
+    b.onclick = () => {
+      deleteRecord(b.dataset.id);
+      closeModal();
+      openRecordsViewer(childId); // Reopen to refresh
+    };
+  });
+}
+
+/* ===========================
+   Charts
+   =========================== */
+
+let tempChart, hrChart, rrChart;
+
+// NUCLEAR OPTION: Disable ALL Chart.js animations globally
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.animation = false;
+  Chart.defaults.animations = {
+    numbers: { duration: 0 },
+    colors: { duration: 0 }
+  };
+  Chart.defaults.transitions = {
+    active: { animation: { duration: 0 } },
+    resize: { animation: { duration: 0 } },
+    show: { animation: { duration: 0 } },
+    hide: { animation: { duration: 0 } }
+  };
+}
+
+function renderCharts() {
+  const allRecords = state.records
+    .filter(r => r.temperature)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  
+  if (allRecords.length === 0) return;
+  
+  const labels = allRecords.map(r => formatDateTime(r.timestamp));
+  const temps = allRecords.map(r => parseFloat(r.temperature));
+  const hrs = allRecords.map(r => r.heartRate ? parseInt(r.heartRate) : null);
+  const rrs = allRecords.map(r => r.respRate ? parseInt(r.respRate) : null);
+  
+  if (tempChart) tempChart.destroy();
+  if (hrChart) hrChart.destroy();
+  if (rrChart) rrChart.destroy();
+  
+  setTimeout(() => {
+    tempChart = new Chart(document.getElementById('tempChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Temperature (°C)',
+          data: temps,
+          borderColor: '#EF4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        transitions: {
+          active: { animation: { duration: 0 } }
+        },
+        scales: { y: { min: 35, max: 42 } }
+      }
+    });
+    
+    if (hrs.some(h => h !== null)) {
+      hrChart = new Chart(document.getElementById('hrChart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Heart Rate (bpm)',
+            data: hrs,
+            borderColor: '#EC4899',
+            backgroundColor: 'rgba(236, 72, 153, 0.1)',
+            tension: 0.3
+          }]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          animation: false,
+          transitions: {
+            active: { animation: { duration: 0 } }
+          }
+        }
+      });
+    }
+    
+    if (rrs.some(r => r !== null)) {
+      rrChart = new Chart(document.getElementById('rrChart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Respiratory Rate (/min)',
+            data: rrs,
+            borderColor: '#10B981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.3
+          }]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          animation: false,
+          transitions: {
+            active: { animation: { duration: 0 } }
+          }
+        }
+      });
+    }
+  }, 100);
+}
+
+document.getElementById('btnToggleTrends').onclick = () => {
+  const area = document.getElementById('chartArea');
+  if (area.classList.contains('hidden')) {
+    area.classList.remove('hidden');
+    renderCharts();
+  } else {
+    area.classList.add('hidden');
+  }
+};
+
+/* ===========================
+   Barcode Scanner
+   =========================== */
+
+let barcodeStream = null;
+let barcodeDetectionInterval = null;
+
+function initBarcodeScanner() {
+  const scanBtn = document.getElementById('btnScanBarcode');
+  const scanModal = document.getElementById('barcodeScannerModal');
+  const closeBtn = document.getElementById('closeBarcodeScanner');
+  const video = document.getElementById('barcodeVideo');
+  
+  if (!scanBtn) return;
+  
+  scanBtn.onclick = async () => {
+    scanModal.classList.remove('hidden');
+    document.getElementById('barcodeResult').classList.add('hidden');
+    
+    try {
+      barcodeStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      video.srcObject = barcodeStream;
+      video.play();
+      
+      // Start scanning
+      startBarcodeDetection(video);
+    } catch (err) {
+      alert('Camera access denied or not available. Please allow camera access to scan barcodes.');
+      scanModal.classList.add('hidden');
+    }
+  };
+  
+  closeBtn.onclick = () => {
+    stopBarcodeScanning();
+    scanModal.classList.add('hidden');
+  };
+  
+  // Close on clicking outside
+  scanModal.onclick = (e) => {
+    if (e.target === scanModal) {
+      stopBarcodeScanning();
+      scanModal.classList.add('hidden');
+    }
+  };
+}
+
+function stopBarcodeScanning() {
+  if (barcodeStream) {
+    barcodeStream.getTracks().forEach(track => track.stop());
+    barcodeStream = null;
+  }
+  if (barcodeDetectionInterval) {
+    clearInterval(barcodeDetectionInterval);
+    barcodeDetectionInterval = null;
+  }
+}
+
+function startBarcodeDetection(video) {
+  // Try using BarcodeDetector API if available (Chrome/Edge on Android)
+  if ('BarcodeDetector' in window) {
+    const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+    
+    barcodeDetectionInterval = setInterval(async () => {
+      try {
+        const barcodes = await barcodeDetector.detect(video);
+        if (barcodes.length > 0) {
+          handleBarcodeDetected(barcodes[0].rawValue);
+        }
+      } catch (err) {
+        // Continue scanning
+      }
+    }, 500);
+  } else {
+    // Fallback: Use ZXing library via CDN
+    loadZXingAndScan(video);
+  }
+}
+
+function loadZXingAndScan(video) {
+  // Load ZXing library dynamically
+  if (!window.ZXing) {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js';
+    script.onload = () => startZXingScanning(video);
+    document.head.appendChild(script);
+  } else {
+    startZXingScanning(video);
+  }
+}
+
+function startZXingScanning(video) {
+  const codeReader = new ZXing.BrowserMultiFormatReader();
+  
+  codeReader.decodeFromVideoDevice(null, video, (result, err) => {
+    if (result) {
+      handleBarcodeDetected(result.text);
+      codeReader.reset();
+    }
+  });
+  
+  // Store for cleanup
+  barcodeDetectionInterval = { reader: codeReader };
+}
+
+function handleBarcodeDetected(barcode) {
+  console.log('Barcode detected:', barcode);
+  
+  // Show result
+  document.getElementById('barcodeValue').textContent = barcode;
+  document.getElementById('barcodeResult').classList.remove('hidden');
+  
+  // Check if we have this medicine in our database
+  const medicineName = MEDICINE_BARCODES[barcode];
+  const matchDiv = document.getElementById('medicineMatch');
+  
+  if (medicineName) {
+    matchDiv.innerHTML = `✓ Matched: <strong>${medicineName}</strong>`;
+    
+    // Auto-select in dropdown
+    const select = document.getElementById('rec_med');
+    if (select) {
+      select.value = medicineName;
+      select.dispatchEvent(new Event('change'));
+    }
+    
+    // Close scanner after 1.5 seconds
+    setTimeout(() => {
+      stopBarcodeScanning();
+      document.getElementById('barcodeScannerModal').classList.add('hidden');
+    }, 1500);
+  } else {
+    matchDiv.innerHTML = `Medicine not found in database. You can still select manually.<br><small class="text-xs">Barcode: ${barcode}</small>`;
+    
+    // Store barcode for potential future matching
+    const customBarcode = {
+      barcode: barcode,
+      timestamp: new Date().toISOString()
+    };
+    const customBarcodes = JSON.parse(localStorage.getItem('dosed_custom_barcodes') || '[]');
+    customBarcodes.push(customBarcode);
+    localStorage.setItem('dosed_custom_barcodes', JSON.stringify(customBarcodes));
+    
+    // Don't auto-close so user can manually select
+  }
+  
+  // Play success sound (optional)
+  try {
+    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSl+zPDTjDoKGmS46+SfTgwOUKXh8LljGwU7k9nyz3wsBSp7y+/ajz0KFmG25Od9LgYcd8vw1Ic3BxdjuOrrm0wMDk+m4fG7ZB0FO5LY8tB8LQUrfMvv24I6CRZhtuTnfi8GHHjM8NWHNgcXY7jq6ptNDA5PpuDxvGQeBTuR2PLPfC0FK3zL79uCOwkWYbbk6H4vBhx4zPDVhzYHF2O46uqbTQwOT6bg8bxkHgU8kdfy0HwtBSt8y+/cgjsJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgkWYbbk6H4vBhx4zPDVhzYHF2O36uqbTQwOT6fg8bxkHgU8kdfy0HwtBSt8y+/bgToJFmG25Oh+LwYceMzw1Yc2Bxdjt+rqm00MDk+n4PG8ZB4FPJHYPGQeBTuR1/LQfC0FK3zL79uBOgk=');
+    audio.play().catch(() => {});
+  } catch (err) {
+    // Ignore audio errors
+  }
+}
+
+/* ===========================
+   Data Sharing via QR Code & Import
+   =========================== */
+
+function shareDataQR(childId) {
+  const child = state.children.find(c => c.id === childId);
+  if (!child) return;
+  
+  const childRecords = getRecordsForChild(childId);
+  const childPresc = getPrescriptionsForChild(childId);
+  
+  // Create shareable data package
+  const shareData = {
+    version: '9.0',
+    child: child,
+    records: childRecords.slice(0, 50), // Last 50 records
+    prescriptions: childPresc,
+    exportedAt: new Date().toISOString()
+  };
+  
+  const dataString = JSON.stringify(shareData);
+  const compressed = btoa(dataString); // Base64 encode
+  
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Share ${escapeHtml(child.name)}'s Data</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <div class="space-y-4">
+      <div class="bg-blue-50 p-4 rounded">
+        <p class="text-sm text-blue-900 mb-2">
+          <i data-lucide="info" class="w-4 h-4 inline"></i>
+          This QR code contains ${escapeHtml(child.name)}'s health data. Anyone who scans it can import this data into their Dosed app.
+        </p>
+      </div>
+      
+      <div class="bg-white p-4 border rounded flex justify-center">
+        <canvas id="qrcode"></canvas>
+      </div>
+      
+      <div class="space-y-2">
+        <button id="btnShareWhatsApp" class="w-full bg-green-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-green-700">
+          <i data-lucide="message-circle"></i> Share via WhatsApp
+        </button>
+        <button id="btnCopyLink" class="w-full bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700">
+          <i data-lucide="copy"></i> Copy Share Link
+        </button>
+        <button id="btnDownloadQR" class="w-full bg-gray-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-gray-700">
+          <i data-lucide="download"></i> Download QR Code
+        </button>
+      </div>
+      
+      <div class="text-xs text-gray-500 text-center">
+        <p>⚠️ Only share with trusted family members</p>
+        <p>Data includes: Profile, last 50 records, active prescriptions</p>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  // Set up button handlers immediately (before QR generation)
+  const shareUrl = `${window.location.origin}${window.location.pathname}?import=${compressed}`;
+  
+  setTimeout(() => {
+    // WhatsApp share - works regardless of QR
+    const btnWhatsApp = document.getElementById('btnShareWhatsApp');
+    if (btnWhatsApp) {
+      btnWhatsApp.onclick = () => {
+        const message = `📱 *Dosed Health Data*\n\n` +
+          `I'm sharing ${child.name}'s health records with you.\n\n` +
+          `To import:\n` +
+          `1. Open this link: ${shareUrl}\n` +
+          `2. Or scan the QR code\n` +
+          `3. Data will be imported automatically\n\n` +
+          `Includes:\n` +
+          `✅ Profile information\n` +
+          `✅ Last 50 health records\n` +
+          `✅ Active prescriptions\n\n` +
+          `_Exported from Dosed app_`;
+        
+        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      };
+    }
+    
+    // Copy link - works regardless of QR
+    const btnCopy = document.getElementById('btnCopyLink');
+    if (btnCopy) {
+      btnCopy.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          alert('✓ Share link copied to clipboard!');
+        } catch (err) {
+          prompt('Copy this link:', shareUrl);
+        }
+      };
+    }
+    
+    // Now try to generate QR code
+    const canvas = document.getElementById('qrcode');
+    if (!canvas) {
+      console.error('Canvas element not found');
+      return;
+    }
+    
+    // Check if QRCode library is loaded
+    if (typeof QRCode === 'undefined') {
+      console.error('QRCode library not loaded');
+      canvas.parentElement.innerHTML = '<div class="text-red-600 p-4 text-center">⚠️ QR Code library failed to load.<br><strong>Use "Copy Link" or "Share via WhatsApp" instead.</strong></div>';
+      return;
+    }
+    
+    try {
+      QRCode.toCanvas(canvas, shareUrl, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#004680',
+          light: '#FFFFFF'
+        }
+      }, (error) => {
+        if (error) {
+          console.error('QR Code error:', error);
+          canvas.parentElement.innerHTML = '<div class="text-orange-600 p-4 text-center">⚠️ QR code generation failed.<br><strong>Use "Copy Link" button below instead.</strong></div>';
+        } else {
+          // QR generated successfully, add download handler
+          const btnDownload = document.getElementById('btnDownloadQR');
+          if (btnDownload) {
+            btnDownload.onclick = () => {
+              try {
+                const link = document.createElement('a');
+                link.download = `dosed-${child.name.replace(/\s+/g, '_')}-qr.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+              } catch (err) {
+                alert('Could not download QR code. Please screenshot instead.');
+              }
+            };
+          }
+        }
+      });
+    } catch (err) {
+      console.error('QR generation failed:', err);
+      canvas.parentElement.innerHTML = '<div class="text-red-600 p-4 text-center">⚠️ QR generation failed.<br>URL may be too long. <strong>Use "Copy Link" instead.</strong></div>';
+    }
+    
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }, 100);
+}
+
+function importDataFromURL() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const importData = urlParams.get('import');
+  
+  if (!importData) return;
+  
+  try {
+    const dataString = atob(importData);
+    const shareData = JSON.parse(dataString);
+    
+    if (confirm(`Import health data for ${shareData.child.name}?\n\nIncludes:\n• Profile information\n• ${shareData.records.length} health records\n• ${shareData.prescriptions.length} prescriptions\n\nThis will add to your existing data.`)) {
+      
+      // Generate new IDs to avoid conflicts
+      const oldChildId = shareData.child.id;
+      const newChildId = uid();
+      
+      // Import child with new ID
+      const importedChild = {
+        ...shareData.child,
+        id: newChildId,
+        name: shareData.child.name + ' (imported)'
+      };
+      state.children.push(importedChild);
+      
+      // Import records with updated child ID
+      shareData.records.forEach(record => {
+        state.records.unshift({
+          ...record,
+          id: uid(),
+          childId: newChildId
+        });
+      });
+      
+      // Import prescriptions with updated child ID
+      shareData.prescriptions.forEach(presc => {
+        state.prescriptions.push({
+          ...presc,
+          id: uid(),
+          childId: newChildId
+        });
+      });
+      
+      persistAndRender();
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      alert(`✓ Successfully imported data for ${shareData.child.name}!\n\nYou can now edit the name and manage the records.`);
+    }
+  } catch (error) {
+    console.error('Import error:', error);
+    alert('❌ Failed to import data. The share link may be invalid or corrupted.');
+  }
+}
+
+function openImportDataModal() {
+  const html = `
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Import Health Data</h3>
+      <button class="btn-modal-close text-gray-500 hover:text-gray-700">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    
+    <div class="space-y-4">
+      <div class="bg-blue-50 p-4 rounded">
+        <p class="text-sm text-blue-900">
+          <i data-lucide="info" class="w-4 h-4 inline"></i>
+          Import health data shared by another Dosed user via QR code or link.
+        </p>
+      </div>
+      
+      <div class="space-y-3">
+        <h4 class="font-semibold">Method 1: Scan QR Code</h4>
+        <button id="btnScanQR" class="w-full bg-purple-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-purple-700">
+          <i data-lucide="camera"></i> Scan QR Code
+        </button>
+        
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-gray-300"></div>
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-2 bg-white text-gray-500">OR</span>
+          </div>
+        </div>
+        
+        <h4 class="font-semibold">Method 2: Paste Share Link</h4>
+        <input id="importLink" type="text" placeholder="Paste share link here..." class="w-full border rounded px-3 py-2">
+        <button id="btnImportFromLink" class="w-full bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700">
+          <i data-lucide="upload"></i> Import from Link
+        </button>
+      </div>
+      
+      <div class="text-xs text-gray-500">
+        <p>⚠️ Imported data will be added to your existing records</p>
+        <p>✓ You can edit or delete imported data after import</p>
+      </div>
+    </div>
+  `;
+  
+  openModal(html, () => {});
+  
+  document.getElementById('btnScanQR').onclick = () => {
+    alert('📷 QR Code scanning:\n\n1. Use your phone\'s camera app\n2. Point at the QR code\n3. Tap the notification to open the link\n4. Data will import automatically');
+    closeModal();
+  };
+  
+  document.getElementById('btnImportFromLink').onclick = () => {
+    const link = document.getElementById('importLink').value.trim();
+    if (!link) {
+      alert('Please paste a share link');
+      return;
+    }
+    
+    try {
+      const url = new URL(link);
+      const importData = url.searchParams.get('import');
+      
+      if (!importData) {
+        alert('Invalid share link - no data found');
+        return;
+      }
+      
+      // Trigger import
+      window.location.href = link;
+    } catch (err) {
+      alert('Invalid link format. Please paste the complete share link.');
+    }
+  };
+  
+  if (typeof lucide !== "undefined") lucide.createIcons();
+}
+
+/* ===========================
+   Init
+   =========================== */
+
+document.getElementById('btnAddChild').onclick = () => openChildModal('add');
+document.getElementById('btnImportData').onclick = () => openImportDataModal();
+document.getElementById('btnClearAllData').onclick = () => clearAllData();
+document.getElementById('btnExportAll').onclick = () => {
+  if (state.children.length === 0) {
+    alert('No data to export');
+    return;
+  }
+  
+  // Export all children
+  state.children.forEach(child => {
+    downloadCSV(child.id);
+  });
+  
+  alert(`✓ Exported data for ${state.children.length} child(ren)`);
+};
+
+// Check for import data in URL
+importDataFromURL();
+
+render();
+setInterval(checkReminders, 60000); // Check every minute
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// Initialize Lucide icons (wait for library to load)
+if (typeof lucide !== 'undefined') {
+  if (typeof lucide !== "undefined") lucide.createIcons();
+} else {
+  // Wait for lucide to load
+  window.addEventListener('load', () => {
+    if (typeof lucide !== 'undefined') {
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    }
+  });
+}
+</script>
+
+</body>
+</html>
