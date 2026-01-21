@@ -2,7 +2,7 @@
   "name": "Dosed - Child Health Tracker",
   "short_name": "Dosed",
   "description": "Monitor child temperatures, medications, symptoms, and vital signs",
-  "start_url": "/",
+  "start_url": "/Dosed/",
   "display": "standalone",
   "background_color": "#004680",
   "theme_color": "#004680",
