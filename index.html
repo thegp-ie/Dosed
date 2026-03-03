@@ -138,6 +138,17 @@
       border-color: #003a6b;
     }
     
+    /* RR Timer animation */
+    .rr-timer-active {
+      animation: pulse-purple 1s ease-in-out infinite;
+      background: #7C3AED !important;
+      color: white !important;
+    }
+    @keyframes pulse-purple {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    
     /* CRITICAL FIX: Force fixed height on chart containers to prevent infinite expansion */
     canvas {
       max-height: 300px !important;
@@ -159,7 +170,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
-              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.0</span>
+              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.1</span>
             </div>
             <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
           </div>
@@ -181,7 +192,7 @@
             </div>
             <div>
               <div id="statDosesToday" class="text-2xl font-bold text-gray-800">0</div>
-              <div class="text-xs text-gray-600">doses today</div>
+              <div class="text-xs text-gray-600">past 24h • <span id="statLastDose">no doses yet</span></div>
             </div>
           </div>
           
@@ -258,6 +269,10 @@
           <div>
             <h3 class="text-sm font-semibold mb-2">Temperature Over Time</h3>
             <canvas id="tempChart" height="120"></canvas>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold mb-2">Weight Over Time</h3>
+            <canvas id="weightChart" height="120"></canvas>
           </div>
           <div>
             <h3 class="text-sm font-semibold mb-2">Heart Rate</h3>
@@ -843,6 +858,67 @@ function validateMedicationDose(medication, dose, childAge, childWeight, recentD
 }
 
 /* ===========================
+   Weight Validation
+   =========================== */
+
+function validateWeight(weight, ageMonths) {
+  const w = parseFloat(weight);
+  
+  // WHO child growth standards (approximate ranges)
+  // These are rough guides - individual variation is normal
+  let minWeight, maxWeight, typical;
+  
+  if (ageMonths <= 6) {
+    minWeight = 3.5;
+    maxWeight = 9;
+    typical = "4-8 kg";
+  } else if (ageMonths <= 12) {
+    minWeight = 6;
+    maxWeight = 12;
+    typical = "7-11 kg";
+  } else if (ageMonths <= 24) {
+    minWeight = 8;
+    maxWeight = 15;
+    typical = "9-13 kg";
+  } else if (ageMonths <= 36) {
+    minWeight = 10;
+    maxWeight = 18;
+    typical = "11-16 kg";
+  } else if (ageMonths <= 60) {
+    minWeight = 12;
+    maxWeight = 23;
+    typical = "13-20 kg";
+  } else if (ageMonths <= 120) {
+    minWeight = 15;
+    maxWeight = 40;
+    typical = "17-30 kg";
+  } else {
+    minWeight = 20;
+    maxWeight = 80;
+    typical = "varies by age";
+  }
+  
+  if (w < minWeight) {
+    return {
+      severity: 'warning',
+      message: `⚠️ Below typical range (${typical})`
+    };
+  }
+  
+  if (w > maxWeight) {
+    return {
+      severity: 'warning',
+      message: `⚠️ Above typical range (${typical})`
+    };
+  }
+  
+  return {
+    severity: 'normal',
+    message: `✓ Within typical range (${typical})`
+  };
+}
+
+/* ===========================
    Active Medications Tracking
    =========================== */
 
@@ -1037,12 +1113,36 @@ function updateQuickStats() {
   
   statsWidget.classList.remove('hidden');
   
-  // Count doses today
-  const today = new Date().toDateString();
-  const dosesToday = state.records.filter(r => 
-    r.medication && new Date(r.timestamp).toDateString() === today
+  // Count doses in past 24 hours
+  const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+  const dosesLast24h = state.records.filter(r => 
+    r.medication && new Date(r.timestamp).getTime() > twentyFourHoursAgo
   ).length;
-  document.getElementById('statDosesToday').textContent = dosesToday;
+  document.getElementById('statDosesToday').textContent = dosesLast24h;
+  
+  // Find last dose for timing display
+  const lastDoseRecord = state.records
+    .filter(r => r.medication)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+  
+  if (lastDoseRecord) {
+    const minutesAgo = Math.floor((Date.now() - new Date(lastDoseRecord.timestamp).getTime()) / 60000);
+    let timeAgoText;
+    if (minutesAgo < 1) {
+      timeAgoText = 'just now';
+    } else if (minutesAgo < 60) {
+      timeAgoText = `${minutesAgo}m ago`;
+    } else if (minutesAgo < 1440) {
+      const hours = Math.floor(minutesAgo / 60);
+      timeAgoText = `${hours}h ago`;
+    } else {
+      const days = Math.floor(minutesAgo / 1440);
+      timeAgoText = `${days}d ago`;
+    }
+    document.getElementById('statLastDose').textContent = timeAgoText;
+  } else {
+    document.getElementById('statLastDose').textContent = 'no doses yet';
+  }
   
   // Find next dose due
   let nextDose = null;
@@ -1152,6 +1252,26 @@ function renderChildren() {
     const activeMeds = getActiveMedications(child.id);
     const conflicts = checkActiveIngredientConflict(child.id);
     
+    // Check for abnormal recent vitals (v12.1)
+    const recentRecords = records
+      .filter(r => (Date.now() - new Date(r.timestamp).getTime()) < (24 * 60 * 60 * 1000))
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    let hasAbnormalVitals = false;
+    let abnormalBadge = '';
+    
+    if (recentRecords.length > 0) {
+      const latest = recentRecords[0];
+      const temp = parseFloat(latest.temperature);
+      const hr = parseInt(latest.heartRate);
+      
+      // Check for fever (>38°C) or very high HR
+      if ((temp && temp >= 38) || (hr && hr > 160)) {
+        hasAbnormalVitals = true;
+        abnormalBadge = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full ml-2" title="Recent abnormal vitals"></span>';
+      }
+    }
+    
     // Active ingredient warning
     let conflictHTML = '';
     if (conflicts.length > 0) {
@@ -1218,12 +1338,17 @@ function renderChildren() {
         const recentDosesHTML = recentDoses.length > 1 ? `
           <div class="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200">
             <div class="font-semibold mb-1">Recent doses:</div>
-            ${recentDoses.slice(0, 3).map((d, idx) => `
-              <div class="flex justify-between">
-                <span>${idx === 0 ? 'Last' : idx === 1 ? '2nd' : '3rd'}:</span>
-                <span>${formatTime(d.timestamp)} (${d.dose}${d.unit||'ml'})</span>
-              </div>
-            `).join('')}
+            ${recentDoses.slice(0, 3).map((d, idx) => {
+              const hoursSince = (Date.now() - new Date(d.timestamp).getTime()) / (1000 * 60 * 60);
+              const showDate = hoursSince > 24;
+              const timeDisplay = showDate ? formatDateTime(d.timestamp) : formatTime(d.timestamp);
+              return `
+                <div class="flex justify-between">
+                  <span>${idx === 0 ? 'Last' : idx === 1 ? '2nd' : '3rd'}:</span>
+                  <span>${timeDisplay} (${d.dose}${d.unit||'ml'})</span>
+                </div>
+              `;
+            }).join('')}
           </div>
         ` : '';
         
@@ -1255,7 +1380,7 @@ function renderChildren() {
       <div class="border rounded-lg p-4 hover:shadow-md transition-shadow" id="child-${child.id}">
         <div class="flex justify-between items-start mb-2">
           <div>
-            <h3 class="text-lg font-bold">${escapeHtml(child.name)}</h3>
+            <h3 class="text-lg font-bold flex items-center">${escapeHtml(child.name)}${abnormalBadge}</h3>
             <div class="text-sm text-gray-600">Age: ${child.age || 'Not set'} ${child.weight ? `• ${child.weight} kg` : ''}</div>
           </div>
           <button class="btn-delete-child text-red-500 hover:text-red-700" data-id="${child.id}">
@@ -1547,13 +1672,14 @@ function exportToCSV(childId) {
   
   // Records CSV
   csv += 'HEALTH RECORDS\n';
-  csv += 'Date,Time,Temperature (°C),Symptoms,Medication,Dose,Unit,Heart Rate (bpm),Resp Rate (/min),Notes\n';
+  csv += 'Date,Time,Temperature (°C),Weight (kg),Symptoms,Medication,Dose,Unit,Heart Rate (bpm),Resp Rate (/min),Notes\n';
   
   childRecords.forEach(r => {
     const date = new Date(r.timestamp);
     csv += `${date.toLocaleDateString('en-GB')},`;
     csv += `${date.toLocaleTimeString('en-GB')},`;
     csv += `${r.temperature || ''},`;
+    csv += `${r.weight || ''},`;
     csv += `"${(r.symptoms || []).join('; ')}",`;
     csv += `${r.medication || ''},`;
     csv += `${r.dose || ''},`;
@@ -1942,21 +2068,39 @@ function openRecordModal(childId) {
         <h4 class="font-semibold text-blue-900 mb-3 flex items-center gap-2">
           <i data-lucide="activity" class="w-4 h-4"></i> Vital Signs
         </h4>
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 gap-3 mb-3">
           <label class="block">
             <span class="text-sm font-medium">Temp (°C)</span>
             <input id="rec_temp" type="number" step="0.1" min="35" max="42" class="mt-1 block w-full border rounded px-3 py-2" placeholder="37.5">
             <div id="tempValidation" class="text-xs mt-1 hidden"></div>
           </label>
           <label class="block">
+            <span class="text-sm font-medium">Weight (kg)</span>
+            <input id="rec_weight" type="number" step="0.1" min="0" max="150" class="mt-1 block w-full border rounded px-3 py-2" placeholder="12.5">
+            <div id="weightValidation" class="text-xs mt-1 hidden"></div>
+          </label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
             <span class="text-sm font-medium">HR (bpm)</span>
             <input id="rec_hr" type="number" min="0" max="300" class="mt-1 block w-full border rounded px-3 py-2" placeholder="120">
             <div id="hrValidation" class="text-xs mt-1 hidden"></div>
           </label>
           <label class="block">
-            <span class="text-sm font-medium">RR (/min)</span>
-            <input id="rec_rr" type="number" min="0" max="100" class="mt-1 block w-full border rounded px-3 py-2" placeholder="25">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm font-medium">RR (/min)</span>
+              <button type="button" id="btnRRTimer" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded flex items-center gap-1 hover:bg-purple-200">
+                <i data-lucide="timer" class="w-3 h-3"></i> <span id="rrTimerText">30s Timer</span>
+              </button>
+            </div>
+            <div class="flex gap-2">
+              <input id="rec_rr" type="number" min="0" max="100" class="flex-1 border rounded px-3 py-2" placeholder="25">
+              <input id="rr_count" type="number" min="0" max="100" class="w-20 border rounded px-3 py-2 bg-gray-50" placeholder="Count" readonly>
+            </div>
             <div id="rrValidation" class="text-xs mt-1 hidden"></div>
+            <div id="rrTimerInfo" class="text-xs text-purple-600 mt-1 hidden">
+              <i data-lucide="info" class="w-3 h-3 inline"></i> Count breaths for 30 seconds, then click Stop
+            </div>
           </label>
         </div>
         <div class="text-xs text-blue-700 mt-2">
@@ -2085,6 +2229,70 @@ function openRecordModal(childId) {
   
   // Initialize barcode scanner
   initBarcodeScanner();
+  
+  // RR Timer (v12.1) - 30 second respiratory rate counter
+  let rrTimerInterval = null;
+  let rrTimerSeconds = 0;
+  let rrTimerActive = false;
+  
+  const rrTimerBtn = document.getElementById('btnRRTimer');
+  const rrTimerText = document.getElementById('rrTimerText');
+  const rrCountField = document.getElementById('rr_count');
+  const rrField = document.getElementById('rec_rr');
+  const rrTimerInfo = document.getElementById('rrTimerInfo');
+  
+  rrTimerBtn.onclick = () => {
+    if (!rrTimerActive) {
+      // Start timer
+      rrTimerActive = true;
+      rrTimerSeconds = 30;
+      rrCountField.value = '0';
+      rrCountField.readOnly = false;
+      rrCountField.focus();
+      rrTimerInfo.classList.remove('hidden');
+      rrTimerBtn.classList.add('rr-timer-active');
+      
+      rrTimerInterval = setInterval(() => {
+        rrTimerSeconds--;
+        rrTimerText.textContent = rrTimerSeconds + 's';
+        
+        if (rrTimerSeconds <= 0) {
+          // Timer complete - calculate RR
+          clearInterval(rrTimerInterval);
+          rrTimerActive = false;
+          const count = parseInt(rrCountField.value) || 0;
+          const rrPerMinute = count * 2; // 30 seconds × 2 = 1 minute
+          rrField.value = rrPerMinute;
+          rrField.dispatchEvent(new Event('input')); // Trigger validation
+          
+          rrTimerText.textContent = '30s Timer';
+          rrTimerBtn.classList.remove('rr-timer-active');
+          rrCountField.readOnly = true;
+          rrTimerInfo.classList.add('hidden');
+          
+          // Show result briefly
+          rrCountField.value = count + ' breaths';
+          setTimeout(() => {
+            rrCountField.value = '';
+          }, 3000);
+        }
+      }, 1000);
+    } else {
+      // Stop timer early
+      clearInterval(rrTimerInterval);
+      rrTimerActive = false;
+      const count = parseInt(rrCountField.value) || 0;
+      const rrPerMinute = count * 2;
+      rrField.value = rrPerMinute;
+      rrField.dispatchEvent(new Event('input'));
+      
+      rrTimerText.textContent = '30s Timer';
+      rrTimerBtn.classList.remove('rr-timer-active');
+      rrCountField.readOnly = true;
+      rrTimerInfo.classList.add('hidden');
+      rrTimerSeconds = 0;
+    }
+  };
   
   // Time selection
   let timeMode = 'now';
@@ -2235,6 +2443,27 @@ function openRecordModal(childId) {
     validationDiv.classList.remove('hidden');
   };
   
+  // Weight validation
+  document.getElementById('rec_weight').oninput = (e) => {
+    const weight = e.target.value;
+    if (!weight || !ageMonths) {
+      document.getElementById('weightValidation').classList.add('hidden');
+      return;
+    }
+    const validation = validateWeight(weight, ageMonths);
+    const validationDiv = document.getElementById('weightValidation');
+    
+    if (validation.severity === 'critical') {
+      validationDiv.className = 'text-xs mt-1 text-red-600 font-semibold';
+    } else if (validation.severity === 'warning') {
+      validationDiv.className = 'text-xs mt-1 text-orange-600';
+    } else {
+      validationDiv.className = 'text-xs mt-1 text-green-600';
+    }
+    validationDiv.textContent = validation.message;
+    validationDiv.classList.remove('hidden');
+  };
+  
   // Real-time medication dose validation
   document.getElementById('rec_dose').oninput = () => {
     const medication = document.getElementById('rec_med').value;
@@ -2282,9 +2511,19 @@ function openRecordModal(childId) {
       unit: document.getElementById('rec_unit').value,
       heartRate: document.getElementById('rec_hr').value,
       respRate: document.getElementById('rec_rr').value,
+      weight: document.getElementById('rec_weight').value, // Weight tracking
       notes: document.getElementById('rec_notes').value,
       photo: currentPhotoData || null // v12: Add photo if uploaded
     };
+    
+    // Update child's current weight if recorded
+    if (rec.weight) {
+      const child = state.children.find(c => c.id === childId);
+      if (child) {
+        child.weight = rec.weight;
+        saveData(state);
+      }
+    }
     
     addRecord(rec);
     currentPhotoData = null; // Reset for next time
@@ -2480,6 +2719,9 @@ function openRecordsViewer(childId) {
   
   const records = getRecordsForChild(childId);
   
+  // Get unique medications for filter
+  const uniqueMeds = [...new Set(records.filter(r => r.medication).map(r => r.medication))];
+  
   const html = `
     <div class="flex justify-between items-center mb-4">
       <h3 class="text-xl font-semibold">Records for ${escapeHtml(child.name)}</h3>
@@ -2488,26 +2730,20 @@ function openRecordsViewer(childId) {
       </button>
     </div>
     
-    <div class="space-y-3 max-h-[60vh] overflow-y-auto">
-      ${records.length === 0 ? '<p class="text-gray-500 text-center py-8">No records yet</p>' : 
-        records.map(r => `
-          <div class="border rounded p-3 ${r.medication ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-blue-500'}">
-            <div class="flex justify-between items-start mb-2">
-              <div class="text-sm text-gray-600">${formatDateTime(r.timestamp)}</div>
-              <button class="btn-delete-record text-red-500 hover:text-red-700" data-id="${r.id}">
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-              </button>
-            </div>
-            ${r.temperature ? `<div class="text-lg font-semibold">🌡️ ${r.temperature}°C</div>` : ''}
-            ${r.symptoms && r.symptoms.length ? `<div class="text-sm text-gray-700 mt-1">Symptoms: ${r.symptoms.join(', ')}</div>` : ''}
-            ${r.medication ? `<div class="text-sm text-green-700 mt-1">💊 ${r.medication} - ${r.dose}${r.unit}</div>` : ''}
-            ${r.heartRate ? `<div class="text-sm text-gray-700 mt-1">❤️ ${r.heartRate} bpm</div>` : ''}
-            ${r.respRate ? `<div class="text-sm text-gray-700 mt-1">🫁 ${r.respRate}/min</div>` : ''}
-            ${r.notes ? `<div class="text-sm text-gray-600 mt-2 italic">${escapeHtml(r.notes)}</div>` : ''}
-            ${r.photo ? `<div class="mt-2"><img src="${r.photo}" class="max-w-full max-h-48 rounded border-2 border-gray-200" alt="Attached photo"></div>` : ''}
-          </div>
-        `).join('')
-      }
+    ${uniqueMeds.length > 0 ? `
+      <div class="mb-3">
+        <label class="text-xs font-medium text-gray-700 mb-1 block">Quick Filter:</label>
+        <select id="recordFilter" class="text-sm border rounded px-2 py-1 bg-white">
+          <option value="all">All Records (${records.length})</option>
+          <option value="medications">Medications Only</option>
+          <option value="vitals">Vitals Only</option>
+          ${uniqueMeds.map(med => `<option value="${escapeAttr(med)}">${med} doses</option>`).join('')}
+        </select>
+      </div>
+    ` : ''}
+    
+    <div id="recordsList" class="space-y-3 max-h-[60vh] overflow-y-auto" data-child-id="${child.id}">
+      <!-- Records rendered dynamically by renderRecordsList() -->
     </div>
     
     <div class="mt-4 pt-4 border-t">
@@ -2519,6 +2755,15 @@ function openRecordsViewer(childId) {
   
   openModal(html, () => {});
   
+  // Render initial records
+  renderRecordsList(childId, 'all');
+  
+  // Setup filter handler
+  const filterSelect = document.getElementById('recordFilter');
+  if (filterSelect) {
+    filterSelect.onchange = (e) => renderRecordsList(childId, e.target.value);
+  }
+  
   document.querySelectorAll('.btn-delete-record').forEach(b => {
     b.onclick = () => {
       deleteRecord(b.dataset.id);
@@ -2528,11 +2773,60 @@ function openRecordsViewer(childId) {
   });
 }
 
+// Helper function to render filtered records list (v12.1)
+function renderRecordsList(childId, filter) {
+  const records = getRecordsForChild(childId);
+  const container = document.getElementById('recordsList');
+  if (!container) return;
+  
+  let filteredRecords = records;
+  
+  if (filter === 'medications') {
+    filteredRecords = records.filter(r => r.medication);
+  } else if (filter === 'vitals') {
+    filteredRecords = records.filter(r => r.temperature || r.heartRate || r.respRate || r.weight);
+  } else if (filter !== 'all') {
+    // Specific medication filter
+    filteredRecords = records.filter(r => r.medication === filter);
+  }
+  
+  container.innerHTML = filteredRecords.length === 0 ? '<p class="text-gray-500 text-center py-8">No matching records</p>' : 
+    filteredRecords.map(r => `
+      <div class="border rounded p-3 ${r.medication ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-blue-500'}">
+        <div class="flex justify-between items-start mb-2">
+          <div class="text-sm text-gray-600">${formatDateTime(r.timestamp)}</div>
+          <button class="btn-delete-record text-red-500 hover:text-red-700" data-id="${r.id}">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+        ${r.temperature ? `<div class="text-lg font-semibold">🌡️ ${r.temperature}°C</div>` : ''}
+        ${r.symptoms && r.symptoms.length ? `<div class="text-sm text-gray-700 mt-1">Symptoms: ${r.symptoms.join(', ')}</div>` : ''}
+        ${r.medication ? `<div class="text-sm text-green-700 mt-1">💊 ${r.medication} - ${r.dose}${r.unit}</div>` : ''}
+        ${r.heartRate ? `<div class="text-sm text-gray-700 mt-1">❤️ ${r.heartRate} bpm</div>` : ''}
+        ${r.respRate ? `<div class="text-sm text-gray-700 mt-1">🫁 ${r.respRate}/min</div>` : ''}
+        ${r.weight ? `<div class="text-sm text-gray-700 mt-1">⚖️ ${r.weight} kg</div>` : ''}
+        ${r.notes ? `<div class="text-sm text-gray-600 mt-2 italic">${escapeHtml(r.notes)}</div>` : ''}
+        ${r.photo ? `<div class="mt-2"><img src="${r.photo}" class="max-w-full max-h-48 rounded border-2 border-gray-200" alt="Attached photo"></div>` : ''}
+      </div>
+    `).join('');
+  
+  // Re-attach delete handlers
+  document.querySelectorAll('.btn-delete-record').forEach(b => {
+    b.onclick = () => {
+      deleteRecord(b.dataset.id);
+      renderRecordsList(childId, filter); // Re-render with same filter
+    };
+  });
+  
+  // Re-initialize Lucide icons
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 /* ===========================
    Charts
    =========================== */
 
-let tempChart, hrChart, rrChart;
+let tempChart, hrChart, rrChart, weightChart;
 
 // NUCLEAR OPTION: Disable ALL Chart.js animations globally
 if (typeof Chart !== 'undefined') {
@@ -2570,6 +2864,7 @@ function renderCharts() {
   if (tempChart) tempChart.destroy();
   if (hrChart) hrChart.destroy();
   if (rrChart) rrChart.destroy();
+  if (weightChart) weightChart.destroy();
   
   // Build datasets per child
   const childColors = [
@@ -2584,6 +2879,7 @@ function renderCharts() {
   const tempDatasets = [];
   const hrDatasets = [];
   const rrDatasets = [];
+  const weightDatasets = [];
   
   // Track min/max temps for dynamic Y-axis
   let minTemp = Infinity;
@@ -2638,6 +2934,23 @@ function renderCharts() {
         data: rrRecords.map(r => ({ 
           x: new Date(r.timestamp), 
           y: parseInt(r.respRate) 
+        })),
+        borderColor: childColors[idx % childColors.length],
+        backgroundColor: childColors[idx % childColors.length] + '20',
+        tension: 0.3,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      });
+    }
+    
+    // Weight dataset
+    const weightRecords = childRecords.filter(r => r.weight);
+    if (weightRecords.length > 0) {
+      weightDatasets.push({
+        label: child.name + ' (kg)',
+        data: weightRecords.map(r => ({ 
+          x: new Date(r.timestamp), 
+          y: parseFloat(r.weight) 
         })),
         borderColor: childColors[idx % childColors.length],
         backgroundColor: childColors[idx % childColors.length] + '20',
@@ -2769,6 +3082,49 @@ function renderCharts() {
           },
           plugins: {
             legend: { display: state.children.length > 1 }
+          }
+        }
+      });
+    }
+    
+    // Weight Chart
+    if (weightDatasets.length > 0) {
+      weightChart = new Chart(document.getElementById('weightChart'), {
+        type: 'line',
+        data: { datasets: weightDatasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          transitions: { active: { animation: { duration: 0 } } },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'day',
+                displayFormats: { day: 'MMM d' }
+              },
+              title: { display: true, text: 'Date' }
+            },
+            y: {
+              beginAtZero: false,
+              title: { display: true, text: 'Weight (kg)' },
+              ticks: {
+                callback: function(value) {
+                  return value.toFixed(1) + ' kg';
+                }
+              }
+            }
+          },
+          plugins: {
+            legend: { display: state.children.length > 1 },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' kg';
+                }
+              }
+            }
           }
         }
       });
@@ -3277,6 +3633,7 @@ setTimeout(() => {
 
 setInterval(() => {
   checkReminders();
+  updateQuickStats(); // v12.1: Real-time countdown update
   // Update medication card countdowns every minute
   renderChildren();
 }, 60000); // Check every minute
