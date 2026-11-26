@@ -2,6 +2,24 @@
 
 Newest first. Older notes: `CHANGELOG_v11.md`, `CHANGELOG_v10.md`.
 
+## v12.8 — Backup & restore with reminders
+- **Back up now** saves everything (children, records, prescriptions, photos and
+  custom barcodes) to one `dosed-backup-YYYY-MM-DD.json` file. On phones it opens
+  the share sheet (save to Files, Google Drive, iCloud, email or WhatsApp); elsewhere
+  it downloads.
+- **Restore from backup** uses the same merge rules as share links: it adds only
+  what's missing and never overwrites or duplicates. Restoring the same file twice
+  changes nothing.
+- **Reminder banner** appears when there are 5 or more records and no backup has
+  been made, or when the last backup is over 7 days old and data has changed since.
+  "Remind me later" hides it for 2 days.
+- Data Management shows when the last backup was made and whether there's new data since.
+- The app asks the browser to protect its storage from automatic clearing.
+- Photos in shared links and backups are kept only if they are plain image data.
+- The header's release date had been stuck on "February 2026". The version and date
+  are now set once (`APP_VERSION` / `APP_RELEASE_DATE` near the top of the script),
+  and the header and share/backup files use them.
+
 ## v12.7 — QR codes fixed, merge-on-import
 - **QR codes work again.** The page loaded `qrcode@1.5.3/build/qrcode.min.js`, a file
   that doesn't exist in that version, so the QR library never loaded. The working
