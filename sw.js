@@ -7,13 +7,14 @@
  * - Third-party libraries (versioned CDN URLs) are cache-first.
  * - Bump CACHE_VERSION on every release so old caches are cleared.
  */
-const CACHE_VERSION = 'v12.6';
+const CACHE_VERSION = 'v12.7';
 const CACHE_NAME = `dosed-${CACHE_VERSION}`;
 
 const APP_SHELL = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './vendor/qrcode.min.js'
 ];
 
 // Must match the exact URLs loaded by index.html
@@ -21,8 +22,7 @@ const CDN_ASSETS = [
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/lucide@0.278.0/dist/lucide.min.js',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js',
-  'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js',
-  'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js'
+  'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js'
 ];
 
 self.addEventListener('install', (event) => {

@@ -25,7 +25,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   
   <!-- QR Code generator -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <!-- QR code generator (node-qrcode 1.4.4, MIT). Bundled locally: the CDN path for 1.5.x does not exist. -->
+  <script src="vendor/qrcode.min.js"></script>
   
   <style>
     /* EB Garamond font family */
@@ -170,7 +171,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
-              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.6</span>
+              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.7</span>
             </div>
             <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
           </div>
@@ -4175,10 +4176,76 @@ async function shareDataQR(childId) {
   }, 100);
 }
 
+/* v12.7: Merge-on-import.
+   Importing never overwrites anything and never duplicates:
+   - Every child/record/prescription carries a stable "origin id" (sourceId, or
+     its own id if it was created on this device). Sharing passes ids along, so
+     the same item keeps the same origin id across devices and repeat shares.
+   - If the shared child already exists here (same origin id, or same name and
+     date of birth for children imported before v12.7), new items are added to
+     that child; items already present are skipped.
+   - Existing profile fields are never changed; empty ones may be filled in. */
+const originId = item => item.sourceId || item.id;
+
+function normaliseName(name) {
+  return String(name || '').replace(/\s*\(imported\)\s*$/i, '').trim().toLowerCase();
+}
+
+function findMatchingChild(sharedChild) {
+  const sharedOrigin = originId(sharedChild);
+  return state.children.find(c => originId(c) === sharedOrigin)
+    || state.children.find(c =>
+      normaliseName(c.name) === normaliseName(sharedChild.name) &&
+      (c.birthDate || '') === (sharedChild.birthDate || ''));
+}
+
+// Fallback fingerprint for records shared by older versions / created twice by hand
+function recordFingerprint(r) {
+  return [new Date(r.timestamp).getTime(), r.temperature || '', r.medication || '', r.dose || '',
+    r.heartRate || '', r.respRate || '', r.weight || ''].join('|');
+}
+function prescriptionFingerprint(p) {
+  return [String(p.medication || '').toLowerCase(), p.dose || '', p.frequency || '', p.startDate || ''].join('|');
+}
+
+function planImport(shareData) {
+  const match = findMatchingChild(shareData.child);
+  const targetId = match ? match.id : null;
+  const existingRecs = targetId ? state.records.filter(r => r.childId === targetId) : [];
+  const existingPresc = targetId ? state.prescriptions.filter(p => p.childId === targetId) : [];
+  const recIds = new Set(existingRecs.map(originId));
+  const recPrints = new Set(existingRecs.map(recordFingerprint));
+  const prescIds = new Set(existingPresc.map(originId));
+  const prescPrints = new Set(existingPresc.map(prescriptionFingerprint));
+
+  const newRecords = [];
+  shareData.records.forEach(r => {
+    const id = originId(r), fp = recordFingerprint(r);
+    if (recIds.has(id) || recPrints.has(fp)) return;
+    recIds.add(id); recPrints.add(fp); // also de-duplicates within the shared batch
+    newRecords.push(r);
+  });
+  const newPrescriptions = [];
+  shareData.prescriptions.forEach(p => {
+    const id = originId(p), fp = prescriptionFingerprint(p);
+    if (prescIds.has(id) || prescPrints.has(fp)) return;
+    prescIds.add(id); prescPrints.add(fp);
+    newPrescriptions.push(p);
+  });
+  return {
+    match, newRecords, newPrescriptions,
+    skippedRecords: shareData.records.length - newRecords.length,
+    skippedPrescriptions: shareData.prescriptions.length - newPrescriptions.length
+  };
+}
+
 async function importDataFromURL() {
   const importData = getImportTokenFromUrl(window.location.href);
   
   if (!importData) return;
+  
+  // Clean URL straight away so a refresh doesn't re-prompt
+  window.history.replaceState({}, document.title, window.location.pathname);
   
   try {
     const shareData = sanitizeImported(await decodeSharePayload(importData));
@@ -4188,51 +4255,61 @@ async function importDataFromURL() {
     shareData.records = Array.isArray(shareData.records) ? shareData.records : [];
     shareData.prescriptions = Array.isArray(shareData.prescriptions) ? shareData.prescriptions : [];
     
-    if (confirm(`Import health data for ${shareData.child.name}?\n\nIncludes:\n• Profile information\n• ${shareData.records.length} health records\n• ${shareData.prescriptions.length} prescriptions\n\nThis will add to your existing data.`)) {
-      
-      // Generate new IDs to avoid conflicts
-      const oldChildId = shareData.child.id;
-      const newChildId = uid();
-      
-      // Import child with new ID
-      const importedChild = {
-        ...shareData.child,
-        id: newChildId,
-        name: shareData.child.name + ' (imported)'
-      };
-      state.children.push(importedChild);
-      
-      // Import records with updated child ID
-      shareData.records.forEach(record => {
-        state.records.unshift({
-          ...record,
-          id: uid(),
-          childId: newChildId
-        });
-      });
-      
-      // Import prescriptions with updated child ID
-      shareData.prescriptions.forEach(presc => {
-        state.prescriptions.push({
-          ...presc,
-          id: uid(),
-          childId: newChildId
-        });
-      });
-      
-      persistAndRender();
-      
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      
-      alert(`✓ Successfully imported data for ${shareData.child.name}!\n\nYou can now edit the name and manage the records.`);
+    const plan = planImport(shareData);
+    const name = shareData.child.name.replace(/\s*\(imported\)\s*$/i, '');
+    const nothingNew = plan.match && plan.newRecords.length === 0 && plan.newPrescriptions.length === 0;
+    
+    if (nothingNew) {
+      alert(`✓ ${plan.match.name} is already up to date.\n\nAll ${shareData.records.length} records and ${shareData.prescriptions.length} prescriptions in this link are already on this device. Nothing was changed.`);
+      return;
     }
-    // Clean URL whether or not the import was accepted, so a refresh doesn't re-prompt
-    window.history.replaceState({}, document.title, window.location.pathname);
+    
+    const skippedLine = (plan.skippedRecords || plan.skippedPrescriptions)
+      ? `\n• Already on this device (skipped): ${plan.skippedRecords} records, ${plan.skippedPrescriptions} prescriptions`
+      : '';
+    const message = plan.match
+      ? `Add new health data to ${plan.match.name}?\n\n• New records: ${plan.newRecords.length}\n• New prescriptions: ${plan.newPrescriptions.length}${skippedLine}\n\nNothing already on this device will be changed.`
+      : `Import ${name} as a new child?\n\n• Profile information\n• ${plan.newRecords.length} health records\n• ${plan.newPrescriptions.length} prescriptions${skippedLine}`;
+    
+    if (!confirm(message)) return;
+    
+    let childId;
+    if (plan.match) {
+      childId = plan.match.id;
+      // Fill in blank profile fields only; never overwrite what's here
+      const sharedChild = shareData.child;
+      const isBlank = v => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+      ['birthDate', 'age', 'weight', 'allergies', 'conditions', 'regularMedications'].forEach(k => {
+        if (isBlank(plan.match[k]) && !isBlank(sharedChild[k])) plan.match[k] = sharedChild[k];
+      });
+      if (!plan.match.sourceId && originId(sharedChild) !== plan.match.id) {
+        plan.match.sourceId = originId(sharedChild);
+      }
+    } else {
+      childId = uid();
+      state.children.push({
+        ...shareData.child,
+        id: childId,
+        sourceId: originId(shareData.child),
+        name
+      });
+    }
+    
+    plan.newRecords.forEach(record => {
+      state.records.unshift({ ...record, id: uid(), sourceId: originId(record), childId });
+    });
+    plan.newPrescriptions.forEach(presc => {
+      state.prescriptions.push({ ...presc, id: uid(), sourceId: originId(presc), childId });
+    });
+    persistAndRender();
+    
+    const total = plan.newRecords.length + plan.newPrescriptions.length;
+    alert(plan.match
+      ? `✓ Added ${total} new item${total === 1 ? '' : 's'} to ${plan.match.name}.`
+      : `✓ Imported ${name} with ${plan.newRecords.length} records.`);
   } catch (error) {
     console.error('Import error:', error);
     alert('❌ Failed to import data. The share link may be invalid or corrupted.');
-    window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
 
