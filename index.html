@@ -171,14 +171,14 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
-              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.8</span>
+              <span id="appVersionBadge" class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.8</span>
             </div>
             <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
           </div>
         </div>
         <div class="text-right">
           <div class="text-xs text-gray-500">Medical Grade</div>
-          <div class="text-xs text-gray-400">February 2026</div>
+          <div id="appReleaseDate" class="text-xs text-gray-400">November 2026</div>
         </div>
       </div>
     </div>
@@ -868,6 +868,11 @@ if (typeof lucide === 'undefined') {
 /* ===========================
    Storage
    =========================== */
+
+/* Release info: update these two lines (only) for each release.
+   The header badge and date are filled in from here. */
+const APP_VERSION = '12.8';
+const APP_RELEASE_DATE = 'November 2026';
 
 const STORAGE_KEYS = {
   children: 'dosed_children',
@@ -4065,7 +4070,7 @@ async function shareDataQR(childId) {
   // Create shareable data package.
   // v12.5: photos are left out — a single photo is far larger than a link or QR code can hold.
   const shareData = {
-    version: '12.5',
+    version: APP_VERSION,
     child: child,
     records: childRecords.slice(0, 50).map(({ photo, ...rest }) => rest), // Last 50 records
     prescriptions: childPresc,
@@ -4430,7 +4435,7 @@ async function backupNow() {
   const backup = {
     app: 'Dosed',
     type: 'backup',
-    version: '12.8',
+    version: APP_VERSION,
     exportedAt: new Date().toISOString(),
     children: state.children,
     records: state.records,
@@ -4648,6 +4653,10 @@ document.getElementById('btnExportAll').onclick = () => {
   
   alert(`✓ Exported data for ${state.children.length} child(ren)`);
 };
+
+// Header version badge and release date come from APP_VERSION / APP_RELEASE_DATE
+document.getElementById('appVersionBadge').textContent = 'v' + APP_VERSION;
+document.getElementById('appReleaseDate').textContent = APP_RELEASE_DATE;
 
 // Check for import data in URL (also when a share link is opened while the app is already open)
 importDataFromURL();

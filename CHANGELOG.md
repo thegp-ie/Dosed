@@ -16,6 +16,9 @@ Newest first. Older notes: `CHANGELOG_v11.md`, `CHANGELOG_v10.md`.
 - Data Management shows when the last backup was made and whether there's new data since.
 - The app asks the browser to protect its storage from automatic clearing.
 - Photos in shared links and backups are kept only if they are plain image data.
+- The header's release date had been stuck on "February 2026". The version and date
+  are now set once (`APP_VERSION` / `APP_RELEASE_DATE` near the top of the script),
+  and the header and share/backup files use them.
 
 ## v12.7 — QR codes fixed, merge-on-import
 - **QR codes work again.** The page loaded `qrcode@1.5.3/build/qrcode.min.js`, a file
