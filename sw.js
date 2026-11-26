@@ -7,7 +7,7 @@
  * - Third-party libraries (versioned CDN URLs) are cache-first.
  * - Bump CACHE_VERSION on every release so old caches are cleared.
  */
-const CACHE_VERSION = 'v12.5';
+const CACHE_VERSION = 'v12.6';
 const CACHE_NAME = `dosed-${CACHE_VERSION}`;
 
 const APP_SHELL = [
