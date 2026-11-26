@@ -295,10 +295,20 @@ def add_problem(patient_id: int, data: dict, request: Request, user: User = Depe
     if code and code not in irish.ICPC2:
         raise HTTPException(400, "Unknown ICPC-2 code")
     data = {**data, "icpc2_code": code, "description": data.get("description") or irish.ICPC2.get(code or "", "")}
+    if data.get("icd_code"):
+        from .. import terminology
+        try:
+            data["icd_system"], data["icd_code"], data["icd_title"] = terminology.validate(
+                db, data.get("icd_system") or "ICD10", data["icd_code"])
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if not data["description"] and data["icd_title"]:
+            data["description"] = data["icd_title"]
     if not data["description"]:
         raise HTTPException(400, "Description required")
     return _add(db, request, user, Problem, patient_id, data,
-                ["icpc2_code", "description", "status", "onset", "notes"], "problem.add")
+                ["icpc2_code", "icd_system", "icd_code", "icd_title", "description", "status", "onset", "notes"],
+                "problem.add")
 
 
 @router.patch("/{patient_id}/problems/{problem_id}")

@@ -27,6 +27,8 @@ services:
       EPR_HEALTHLINK_ARCHIVE_DIR: /data/healthlink/archive
     volumes:
       - healthlink:/data/healthlink
+    tmpfs:
+      - /tmp   # uploads (e.g. scribe audio) are spooled in RAM, never to disk
     depends_on:
       db: { condition: service_healthy }
     networks: [internal, web]

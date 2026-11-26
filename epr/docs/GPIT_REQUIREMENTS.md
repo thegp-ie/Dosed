@@ -38,7 +38,7 @@ maps each requirement to the code and records what is still to do.
 | DC.1.8.4 | Clinical measurements | ✅ | `Observation` with plausibility checks |
 | DC.1.8.5 | Clinical documents and notes, free text | ✅ | SOAP notes (encrypted), addenda |
 | DC.1.8.7 | Ante-natal / post-natal care (Table 9) | ⬜ | Maternity & Infant Scheme module to do |
-| DC.2.3.1.1 | Drug interaction checking | 🟡 | Hook in `clinical._safety_checks`; needs a licensed Irish drug database |
+| DC.2.3.1.1 | Drug interaction checking | 🟡 | Allergy checks by name, substance and ATC class done; drug–drug interactions need a licensed knowledge base (see `TERMINOLOGY_AND_FORMULARY.md`) |
 | DC.2.3.1.2 | Patient-specific dosing and warnings | 🟡 | Allergy + duplicate checks done; renal/paediatric dosing needs the drug database |
 | DC.2.5 | Preventive care alerts | 🟡 | CDM due list and cervical screening list; immunisation schedule alerts to do |
 | DC.3.1 | Task creation, routing, linking, tracking | ✅ | `Task` linked to patient and source inbox item |
@@ -58,7 +58,8 @@ maps each requirement to the code and records what is still to do.
 | IN.2.2 | Auditable records | ✅ | `audit.py`: append-only SHA-256 chain, `verify-audit` |
 | IN.2.4 | Extraction, including de-identified | 🟡 | Full extraction done; de-identified extract to do |
 | IN.2.6 | Data portability: export of all data | ✅ | `/api/patients/{id}/export` (JSON). Practice-wide export to do |
-| IN.4.1–4.2 | Standard terminologies and updates | 🟡 | ICPC-2 subset; add full ICPC-2, ICD-10 and SNOMED CT mapping |
+| IN.4.1–4.2 | Standard terminologies and updates | 🟡 | ICPC-2 (subset) + ICD-10/ICD-11/SNOMED code lists loadable and replaceable; ICD-11 via local WHO ICD-API; full SNOMED RF2 support to do |
+| S.3.2.1 | Rules-driven clinical coding assistance | ✅ | Code lookup; AI scribe suggests codes with evidence, checked against code lists |
 | IN.5 | Standards-based interoperability | 🟡 | HL7 v2.4; FHIR R4 export planned for EHDS |
 
 ## Section 2: Irish programmes

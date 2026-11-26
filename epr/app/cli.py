@@ -4,6 +4,8 @@
     python -m app.cli verify-audit
     python -m app.cli gen-keys
     python -m app.cli seed-demo          (development only: fictional patients)
+    python -m app.cli load-codes ICD10|ICD11|SNOMED FILE.csv|.tsv
+    python -m app.cli load-formulary hpra_xml|nmpc_csv|csv FILE
 """
 from __future__ import annotations
 
@@ -102,6 +104,31 @@ def seed_demo(_):
     print("Demo data ready. Users: drmurphy / nurse.kelly / reception / manager, password demo-password-123")
 
 
+def load_codes(a):
+    from . import terminology
+    Base.metadata.create_all(engine)
+    db = SessionLocal()
+    with open(a.file, encoding="utf-8-sig", errors="replace") as f:
+        n = terminology.load_codes(db, a.system, f.read(), source=os.path.basename(a.file))
+    audit.record(db, "terminology.load", detail={"system": a.system.upper(), "count": n, "via": "cli"})
+    print(f"Loaded {n} {a.system.upper()} codes")
+
+
+def load_formulary(a):
+    from . import formulary
+    Base.metadata.create_all(engine)
+    db = SessionLocal()
+    with open(a.file, "rb") as f:
+        data = f.read()
+    if a.kind == "hpra_xml":
+        n = formulary.load_hpra_xml(db, data)
+    else:
+        n = formulary.load_csv(db, data.decode("utf-8-sig", errors="replace"), source="nmpc" if a.kind == "nmpc_csv" else "csv")
+    audit.record(db, "formulary.load", detail={"kind": a.kind, "count": n, "via": "cli"})
+    print(f"Loaded {n} products" + ("" if n else " - check the file format"))
+    sys.exit(0 if n else 1)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(required=True)
@@ -116,6 +143,14 @@ def main():
     sub.add_parser("verify-audit").set_defaults(fn=verify)
     sub.add_parser("gen-keys").set_defaults(fn=gen_keys)
     sub.add_parser("seed-demo").set_defaults(fn=seed_demo)
+    lc = sub.add_parser("load-codes")
+    lc.add_argument("system", choices=["ICD10", "ICD11", "SNOMED", "icd10", "icd11", "snomed"])
+    lc.add_argument("file")
+    lc.set_defaults(fn=load_codes)
+    lf = sub.add_parser("load-formulary")
+    lf.add_argument("kind", choices=["hpra_xml", "nmpc_csv", "csv"])
+    lf.add_argument("file")
+    lf.set_defaults(fn=load_formulary)
     a = ap.parse_args()
     a.fn(a)
 

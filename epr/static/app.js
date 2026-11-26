@@ -281,7 +281,7 @@ function tabSummary(c) {
   (c.observations || []).forEach((o) => { if (!lastObs[o.kind]) lastObs[o.kind] = o; });
   const missing = p.missing_desirable || [];
   return h("div", { class: "grid2" },
-    card("Problems", cdmPill(c.cdm), can("clinical.read") ? table([["Code", (x) => x.icpc2_code || ""], ["Problem", (x) => x.description], ["Since", (x) => fmtDate(x.onset || x.recorded_at)]], activeProblems) : h("p", { class: "muted" }, "Clinical details hidden for your role"),
+    card("Problems", cdmPill(c.cdm), can("clinical.read") ? table([["Code", (x) => [x.icpc2_code, x.icd_code].filter(Boolean).join(" / ")], ["Problem", (x) => x.description], ["Since", (x) => fmtDate(x.onset || x.recorded_at)]], activeProblems) : h("p", { class: "muted" }, "Clinical details hidden for your role"),
       can("clinical.write") ? addProblem() : null),
     card("Allergies & intolerances", null, table([["Substance", (a) => a.substance], ["Reaction", (a) => a.reaction || ""], ["Severity", (a) => a.severity]], c.allergies || []), can("clinical.write") ? addAllergy() : null),
     can("clinical.read") ? card("Repeat medication", null, table([["Drug", (i) => [i.drug_name, i.strength].filter(Boolean).join(" ")], ["Dose", (i) => i.dose_instructions], ["Last issued", (i) => fmtDate(i.rx.created_at)]], repeats)) : null,
@@ -293,8 +293,9 @@ function tabSummary(c) {
       missing.length ? h("div", { class: "alert warn small" }, "Missing: " + missing.join(", ")) : null));
 }
 function addProblem() {
-  const f = form([["icpc2_code", "ICPC-2 code"], ["description", "Description (optional if coded)"], ["onset", "Onset", "date"]]);
+  const f = form([["icpc2_code", "ICPC-2 code"], ["icd_system", "ICD classification", "select", [["ICD10", "ICD-10"], ["ICD11", "ICD-11"], ["SNOMED", "SNOMED CT"]]], ["icd_code", "ICD code (optional)"], ["description", "Description (optional if coded)"], ["onset", "Onset", "date"]]);
   attachIcpcLookup(f.querySelector("[name=icpc2_code]"));
+  attachIcdLookup(f.querySelector("[name=icd_code]"), f.querySelector("[name=icd_system]"));
   return h("details", {}, h("summary", {}, "Add problem"), f, btn("Add", async () => { await api("POST", `/api/patients/${S.chart.patient.id}/problems`, readForm(f)); reloadChart(); }));
 }
 function addAllergy() {
@@ -319,11 +320,22 @@ function attachIcpcLookup(input) {
   });
 }
 
+function attachIcdLookup(input, systemSel) {
+  const list = h("datalist", { id: "icd-" + Math.random().toString(36).slice(2) });
+  input.setAttribute("list", list.id);
+  input.after(list);
+  input.addEventListener("input", async () => {
+    if (input.value.length < 2) return;
+    const rows = await api("GET", `/api/terminology/search?system=${systemSel ? systemSel.value : "ICD10"}&q=` + encodeURIComponent(input.value));
+    list.replaceChildren(...rows.map((r) => h("option", { value: r.code }, `${r.code} ${r.title}`)));
+  });
+}
+
 function noteView(n) {
   const fields = [["S", n.subjective], ["O", n.objective], ["A", n.assessment], ["P", n.plan]].filter(([, v]) => v);
   const editable = !n.signed_at && n.clinician_id === S.me.user.id && Date.now() - new Date(n.started_at) < 12 * 3600e3;
   return h("div", { class: "note" + (n.entered_in_error ? " err" : "") },
-    h("div", { class: "meta" }, `${fmtDT(n.started_at)} · ${n.clinician_name} · ${n.mode}`, n.icpc2_code ? ` · ${n.icpc2_code}` : "",
+    h("div", { class: "meta" }, `${fmtDT(n.started_at)} · ${n.clinician_name} · ${n.mode}`, n.icpc2_code ? ` · ${n.icpc2_code}` : "", n.icd_code ? ` · ${n.icd_system} ${n.icd_code}` : "", n.ai_scribe_used ? " · AI-assisted draft, reviewed" : "",
       n.signed_at ? " · signed" : editable ? " · editable until locked" : "", n.entered_in_error ? ` · ENTERED IN ERROR: ${n.error_reason}` : "",
       n.mode !== "surgery" && n.mode !== "home" ? ` · consent ${n.remote_consent_recorded ? "✓" : "✗"} · ID ${n.remote_identity_verified ? "✓" : "✗"}` : ""),
     fields.map(([k, v]) => h("p", {}, h("strong", {}, k + ": "), v)),
@@ -336,10 +348,11 @@ function noteView(n) {
 
 function consultForm(n = {}) {
   const f = form([["mode", "Type", "select", [["surgery", "In surgery"], ["phone", "Phone"], ["video", "Video"], ["home", "Home visit"], ["nursing_home", "Nursing home"]]],
-    ["icpc2_code", "ICPC-2 reason code"], ["add_problem", "Add code to problem list", "checkbox"],
+    ["icpc2_code", "ICPC-2 reason code"], ["icd_system", "ICD classification", "select", [["ICD10", "ICD-10"], ["ICD11", "ICD-11"], ["SNOMED", "SNOMED CT"]]], ["icd_code", "ICD code (optional)"], ["add_problem", "Add code to problem list", "checkbox"],
     ["subjective", "History (S)", "textarea"], ["objective", "Examination (O)", "textarea"], ["assessment", "Assessment (A)", "textarea"], ["plan", "Plan (P)", "textarea"],
     ["remote_consent_recorded", "Remote: patient consented to phone/video consultation", "checkbox"], ["remote_identity_verified", "Remote: identity confirmed (name, DOB, address)", "checkbox"]], n);
   attachIcpcLookup(f.querySelector("[name=icpc2_code]"));
+  attachIcdLookup(f.querySelector("[name=icd_code]"), f.querySelector("[name=icd_system]"));
   return f;
 }
 function editNote(n) {
@@ -361,12 +374,89 @@ function tabConsult(c) {
   };
   setTimeout(() => f.querySelector("[name=subjective]")?.focus(), 0);
   return h("div", {},
+    can("scribe") ? scribePanel(c, open) : null,
     can("clinical.write") ? card(open ? "Continue consultation" : "New consultation", null, f, h("div", { class: "row" }, btn("Save", () => save(false)), btn("Save & sign", () => save(true), "secondary"),
       h("span", { class: "small muted" }, "Notes can be edited by the author for 12 hours unless signed; after that, add an addendum."))) : null,
     card("History", null, (c.consultations || []).map(noteView)));
 }
 
+// ------------------------------------------------------------- AI scribe
+function scribePanel(c, open) {
+  const box = h("div", {});
+  const consent = h("input", { type: "checkbox" });
+  const status = h("span", { class: "small muted" });
+  let rec = null, chunks = [], started = 0, session = null;
+  const stopTracks = () => rec && rec.stream.getTracks().forEach((t) => t.stop());
+  const startBtn = btn("● Start recording", async () => {
+    if (!consent.checked) return toast("Ask the patient and tick consent first");
+    try {
+      let cid = open && open.id;
+      if (!cid) cid = (await api("POST", `/api/patients/${c.patient.id}/consultations`, {})).id;
+      session = await api("POST", `/api/consultations/${cid}/scribe`, { patient_consent: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      rec = new MediaRecorder(stream);
+      chunks = []; started = Date.now();
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      rec.onstop = upload;
+      rec.start(1000);
+      startBtn.disabled = true; stopBtn.disabled = false; status.textContent = "Recording… (audio stays in this practice and is not kept)";
+    } catch (e) { toast("Could not start recording: " + e.message); }
+  }, "danger");
+  const stopBtn = btn("■ Stop and draft note", () => { rec && rec.state !== "inactive" && rec.stop(); stopTracks(); stopBtn.disabled = true; status.textContent = "Transcribing and drafting… this can take a minute."; }, "secondary");
+  stopBtn.disabled = true;
+  async function upload() {
+    const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+    chunks = [];
+    const fd = new FormData();
+    fd.append("file", blob, "consultation.webm");
+    fd.append("seconds", String(Math.round((Date.now() - started) / 1000)));
+    try { showDraft(await api("POST", `/api/scribe/${session.id}/audio`, fd)); }
+    catch (e) { status.textContent = "Failed: " + e.message; startBtn.disabled = false; }
+  }
+  function showDraft(s) {
+    const d = s.draft;
+    const f = form([["subjective", "History (S)", "textarea"], ["objective", "Examination (O)", "textarea"], ["assessment", "Assessment (A)", "textarea"], ["plan", "Plan (P)", "textarea"],
+      ["icpc2_code", "ICPC-2"], ["icd_system", "ICD classification", "select", [["ICD10", "ICD-10"], ["ICD11", "ICD-11"]]], ["icd_code", "ICD code"]],
+    { ...d, icpc2_code: (d.suggested_codes.find((x) => x.system === "ICPC2") || {}).code, icd_code: (d.suggested_codes.find((x) => x.system === "ICD10") || {}).code });
+    box.replaceChildren(
+      h("div", { class: "alert warn" }, "AI draft — check every line against what happened before accepting. You are responsible for the note."),
+      d.uncertainties.length ? h("div", { class: "alert bad" }, h("strong", {}, "Check: "), d.uncertainties.join("; ")) : null,
+      d.suggested_codes.length ? h("p", { class: "small" }, "Suggested codes: ", d.suggested_codes.map((x) => h("span", { class: "pill" + (x.verified ? "" : " warn"), title: x.evidence }, `${x.system} ${x.code} ${x.label}`)), " ") : null,
+      f,
+      h("details", {}, h("summary", {}, "Transcript"), h("pre", { class: "msg" }, s.transcript || "")),
+      h("div", { class: "row" }, btn("Accept into note", async () => { await api("POST", `/api/scribe/${s.id}/accept`, readForm(f)); toast("Added to the note — review and sign"); reloadChart(); }),
+        btn("Discard", async () => { await api("POST", `/api/scribe/${s.id}/discard`); toast("Draft discarded"); reloadChart(); }, "secondary")),
+      h("p", { class: "small muted" }, `Models: ${s.stt_model} / ${s.llm_model}. Transcript and draft are deleted when you accept or discard.`));
+  }
+  api("GET", "/api/scribe/status").then((st) => {
+    if (!st.enabled) { box.replaceChildren(h("p", { class: "small muted" }, "The AI scribe is not set up on this server (see docs/AI_SCRIBE.md).")); return; }
+    box.replaceChildren(h("label", { class: "inline" }, consent, "The patient has been told an AI scribe will transcribe this consultation and has agreed"),
+      h("div", { class: "row" }, startBtn, stopBtn, status));
+  }).catch(() => {});
+  return card("AI scribe", h("span", { class: "pill" }, "self-hosted"), box);
+}
+
 function rxItemRow() {
+  const row = rxItemForm();
+  const name = row.querySelector("[name=drug_name]");
+  const list = h("datalist", { id: "drug-" + Math.random().toString(36).slice(2) });
+  name.setAttribute("list", list.id);
+  name.after(list);
+  let found = [];
+  name.addEventListener("input", async () => {
+    const hit = found.find((p) => p.name === name.value);
+    if (hit) {
+      const set = (k, v) => { const el = row.querySelector(`[name=${k}]`); if (el && v && !el.value) el.value = v; };
+      set("strength", hit.strength); set("form", hit.dosage_form); set("cd_schedule", hit.controlled_schedule);
+      return;
+    }
+    if (name.value.length < 3) return;
+    found = await api("GET", "/api/formulary/search?q=" + encodeURIComponent(name.value));
+    list.replaceChildren(...found.map((p) => h("option", { value: p.name }, [p.active_substances, p.dosage_form, p.controlled_schedule].filter(Boolean).join(" · "))));
+  });
+  return row;
+}
+function rxItemForm() {
   return form([["drug_name", "Drug"], ["strength", "Strength"], ["form", "Form"], ["dose_instructions", "Dose"], ["quantity", "Quantity"], ["repeats", "Repeats", "number"],
     ["is_repeat_medication", "Repeat medication", "checkbox"], ["cd_schedule", "Controlled drug", "select", [["", "No"], "CD1", "CD2", "CD3", "CD4", "CD5"]], ["is_ost", "Opiate substitution (OST)", "checkbox"], ["generic_substitution_allowed", "Generic substitution allowed", "checkbox"]],
   { generic_substitution_allowed: true, repeats: 0 });
@@ -574,6 +664,20 @@ async function viewSettings() {
   const blocks = [h("h2", {}, "My settings"),
     card("Healthmail", null, h("p", { class: "small muted" }, "Link your own Healthmail account. Messages and prescriptions you send are sent from it, and only while you are signed in."), hmf,
       btn("Link account", async () => { await api("POST", "/api/auth/healthmail-account", readForm(hmf)); toast("Healthmail linked"); }))];
+  if (can("reference.load")) {
+    const st = await api("GET", "/api/reference/status");
+    const fKind = h("select", {}, h("option", { value: "hpra_xml" }, "HPRA authorised products (XML, free)"), h("option", { value: "nmpc_csv" }, "HSE NMPC export (CSV, licensed)"), h("option", { value: "csv" }, "Other CSV"));
+    const fFile = h("input", { type: "file" });
+    const cSys = h("select", {}, ["ICD10", "ICD11", "SNOMED"].map((x) => h("option", { value: x }, x)));
+    const cFile = h("input", { type: "file", accept: ".csv,.tsv,.txt" });
+    const up = async (url, fields, file) => { if (!file.files[0]) return toast("Choose a file"); const fd = new FormData(); for (const [k, v] of Object.entries(fields)) fd.append(k, v); fd.append("file", file.files[0]); const r = await api("POST", url, fd); toast(`Loaded ${r.loaded}`); go("settings"); };
+    blocks.push(card("Reference data", null,
+      h("p", { class: "small" }, "Medicines: ", Object.entries(st.products).map(([k, v]) => `${k} ${v.count} (${fmtDate(v.loaded_at)})`).join(", ") || "none loaded"),
+      h("div", { class: "row" }, fKind, fFile, btn("Load medicines", () => up("/api/formulary/load", { kind: fKind.value }, fFile), "secondary")),
+      h("p", { class: "small" }, "Code lists: ", Object.entries(st.codes).map(([k, v]) => `${k}: ${v}`).join(" · "), st.icd11_api ? " · ICD-11 search via local WHO ICD-API" : ""),
+      h("div", { class: "row" }, cSys, cFile, btn("Load codes", () => up("/api/terminology/load", { system: cSys.value }, cFile), "secondary")),
+      h("p", { class: "small muted" }, "Load only files the practice is licensed to use. See docs/TERMINOLOGY_AND_FORMULARY.md.")));
+  }
   if (can("users.manage")) {
     const uf = form([["username", "Username"], ["full_name", "Full name"], ["role", "Role", "select", ["gp", "nurse", "nurse_prescriber", "reception", "practice_manager", "sysadmin"]], ["password", "Temporary password (12+)", "password"], ["mcrn", "IMC number"], ["nmbi_pin", "NMBI PIN"], ["gms_doctor_number", "GMS doctor no."], ["healthmail_address", "Healthmail"]]);
     blocks.push(card("Staff accounts", null, table([["Name", (u) => u.full_name], ["Username", (u) => u.username], ["Role", (u) => u.role], ["2FA", (u) => (u.mfa_enabled ? "on" : "not set up")], ["Active", (u) => (u.active ? "yes" : "no")],

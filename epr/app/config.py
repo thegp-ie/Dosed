@@ -68,6 +68,28 @@ class Settings:
     jitsi_app_secret: str = field(default_factory=lambda: os.environ.get("EPR_JITSI_APP_SECRET", ""))
     public_base_url: str = field(default_factory=lambda: os.environ.get("EPR_PUBLIC_BASE_URL", "https://epr.example.ie"))
 
+    # AI scribe. Both services run on infrastructure the practice controls; audio and
+    # transcripts never go to a third party. Empty URL = feature off.
+    # Speech-to-text: a self-hosted Whisper server taking multipart "file" and returning {"text": ...}
+    # (e.g. whisper.cpp server's /inference, or a faster-whisper server's transcription route).
+    stt_url: str = field(default_factory=lambda: os.environ.get("EPR_STT_URL", ""))
+    stt_model: str = field(default_factory=lambda: os.environ.get("EPR_STT_MODEL", "whisper-large-v3"))
+    # Note drafting: a self-hosted Ollama server (POST /api/chat).
+    llm_url: str = field(default_factory=lambda: os.environ.get("EPR_LLM_URL", ""))
+    llm_model: str = field(default_factory=lambda: os.environ.get("EPR_LLM_MODEL", ""))
+    ai_timeout_seconds: int = field(default_factory=lambda: int(os.environ.get("EPR_AI_TIMEOUT_SECONDS", "300")))
+    scribe_retain_days: int = field(default_factory=lambda: int(os.environ.get("EPR_SCRIBE_RETAIN_DAYS", "0")))
+    scribe_max_audio_mb: int = field(default_factory=lambda: int(os.environ.get("EPR_SCRIBE_MAX_AUDIO_MB", "60")))
+
+    # Optional: WHO's locally deployable ICD-API container, for ICD-11 search without
+    # sending queries outside the practice. Empty = use only codes loaded into the database.
+    icd_api_url: str = field(default_factory=lambda: os.environ.get("EPR_ICD_API_URL", ""))
+    icd11_release: str = field(default_factory=lambda: os.environ.get("EPR_ICD11_RELEASE", "2025-01"))
+
+    @property
+    def scribe_enabled(self) -> bool:
+        return bool(self.stt_url and self.llm_url and self.llm_model)
+
     @property
     def is_production(self) -> bool:
         return self.env == "production"

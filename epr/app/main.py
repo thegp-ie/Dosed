@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .db import Base, SessionLocal, engine
-from .routers import appointments, auth, clinical, governance, inbox, patients
+from .routers import ai, appointments, auth, clinical, governance, inbox, patients, reference
 
 log = logging.getLogger("epr")
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -31,16 +31,32 @@ async def _healthlink_loop(interval: int):
             db.close()
 
 
+async def _maintenance_loop():
+    """Hourly housekeeping: purge expired AI scribe transcripts and drafts."""
+    from . import ai_scribe
+    while True:
+        await asyncio.sleep(3600)
+        db = SessionLocal()
+        try:
+            await asyncio.to_thread(ai_scribe.purge_expired, db)
+        except Exception:
+            log.exception("Maintenance failed")
+        finally:
+            db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate()
     # Schema creation for first run. Use migrations (Alembic) for upgrades in production.
     Base.metadata.create_all(engine)
+    maint = asyncio.create_task(_maintenance_loop())
     task = None
     interval = int(os.environ.get("EPR_HEALTHLINK_POLL_SECONDS", "0"))
     if interval > 0 and settings.healthlink_mode == "directory":
         task = asyncio.create_task(_healthlink_loop(interval))
     yield
+    maint.cancel()
     if task:
         task.cancel()
 
@@ -60,7 +76,7 @@ async def security_headers(request: Request, call_next):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
     resp.headers["X-Frame-Options"] = "DENY"
-    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    resp.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
     if settings.cookie_secure:
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if request.url.path.startswith("/api/") or request.url.path.startswith("/v/"):
@@ -75,7 +91,8 @@ async def unhandled(request: Request, exc: Exception):
     return JSONResponse({"detail": "Internal error"}, status_code=500)
 
 
-for r in (auth.router, patients.router, clinical.router, inbox.router, appointments.router, governance.router):
+for r in (auth.router, patients.router, clinical.router, inbox.router, appointments.router, governance.router,
+          reference.router, ai.router):
     app.include_router(r)
 
 

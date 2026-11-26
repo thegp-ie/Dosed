@@ -181,6 +181,10 @@ class Problem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
     icpc2_code: Mapped[str | None] = mapped_column(String(10), index=True)
+    # Secondary classification alongside ICPC-2 (dual coding): ICD10 | ICD11 | SNOMED
+    icd_system: Mapped[str | None] = mapped_column(String(10))
+    icd_code: Mapped[str | None] = mapped_column(String(30), index=True)
+    icd_title: Mapped[str | None] = mapped_column(String(300))
     description: Mapped[str] = mapped_column(String(300))
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | past
     onset: Mapped[date | None] = mapped_column(Date)
@@ -202,8 +206,14 @@ class Consultation(Base):
     assessment: Mapped[str | None] = mapped_column(EncryptedText)
     plan: Mapped[str | None] = mapped_column(EncryptedText)
     icpc2_code: Mapped[str | None] = mapped_column(String(10))
+    # Secondary classification alongside ICPC-2 (dual coding): ICD10 | ICD11 | SNOMED
+    icd_system: Mapped[str | None] = mapped_column(String(10))
+    icd_code: Mapped[str | None] = mapped_column(String(30), index=True)
+    icd_title: Mapped[str | None] = mapped_column(String(300))
     remote_consent_recorded: Mapped[bool] = mapped_column(Boolean, default=False)
     remote_identity_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Draft produced with the AI scribe and accepted by the clinician (shown on the note).
+    ai_scribe_used: Mapped[bool] = mapped_column(Boolean, default=False)
     # Once signed the note is read-only; corrections go in addenda.
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     entered_in_error: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -487,3 +497,63 @@ class Invoice(Base):
     paid_cents: Mapped[int] = mapped_column(Integer, default=0)
     method: Mapped[str | None] = mapped_column(String(20))  # cash | card | transfer
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+
+class TerminologyCode(Base):
+    """Code lists loaded from files the practice is licensed to use (ICD-10, ICD-11, SNOMED CT
+    Irish Edition subsets). See docs/TERMINOLOGY_AND_FORMULARY.md for sources and licences."""
+    __tablename__ = "terminology_codes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    system: Mapped[str] = mapped_column(String(10), index=True)  # ICD10 | ICD11 | SNOMED
+    code: Mapped[str] = mapped_column(String(40), index=True)
+    title: Mapped[str] = mapped_column(String(400))
+    title_key: Mapped[str] = mapped_column(String(400), index=True)  # lower-case, accents stripped
+    source: Mapped[str | None] = mapped_column(String(200))
+    __table_args__ = (UniqueConstraint("system", "code", name="uq_terminology_system_code"),)
+
+
+class MedicinalProduct(Base):
+    """Drug dictionary for prescribing, loaded from the HPRA authorised-products listing
+    (free) or the HSE National Medicinal Product Catalogue (licensed). Not a clinical
+    knowledge base: no interactions or dosing rules."""
+    __tablename__ = "medicinal_products"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(300))
+    name_key: Mapped[str] = mapped_column(String(300), index=True)
+    active_substances: Mapped[str | None] = mapped_column(String(500))
+    strength: Mapped[str | None] = mapped_column(String(200))
+    dosage_form: Mapped[str | None] = mapped_column(String(200))
+    route: Mapped[str | None] = mapped_column(String(100))
+    atc_code: Mapped[str | None] = mapped_column(String(10), index=True)
+    licence_number: Mapped[str | None] = mapped_column(String(40), index=True)
+    licence_holder: Mapped[str | None] = mapped_column(String(200))
+    supply_status: Mapped[str | None] = mapped_column(String(60))  # e.g. prescription only
+    controlled_schedule: Mapped[str | None] = mapped_column(String(5))
+    interchangeable_group: Mapped[str | None] = mapped_column(String(60))
+    source: Mapped[str] = mapped_column(String(40))  # hpra | nmpc | csv
+    loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    __table_args__ = (UniqueConstraint("source", "licence_number", "name", name="uq_product_source_licence_name"),)
+
+
+class ScribeSession(Base):
+    """AI scribe: audio -> transcript -> draft note, reviewed by the clinician.
+
+    Audio is never stored. The transcript and draft are encrypted and purged after the
+    clinician accepts or discards the draft (plus EPR_SCRIBE_RETAIN_DAYS)."""
+    __tablename__ = "scribe_sessions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    consultation_id: Mapped[int] = mapped_column(ForeignKey("consultations.id", ondelete="CASCADE"), index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    patient_consent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # awaiting_audio | drafted | accepted | discarded | failed
+    status: Mapped[str] = mapped_column(String(20), default="awaiting_audio")
+    audio_seconds: Mapped[float | None] = mapped_column(Float)
+    transcript: Mapped[str | None] = mapped_column(EncryptedText)
+    draft: Mapped[str | None] = mapped_column(EncryptedText)  # JSON
+    stt_model: Mapped[str | None] = mapped_column(String(100))
+    llm_model: Mapped[str | None] = mapped_column(String(100))
+    error: Mapped[str | None] = mapped_column(Text)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purge_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

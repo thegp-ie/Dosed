@@ -49,7 +49,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "sysadmin": {"users.manage", "audit.read", "governance", "system"},
 }
-ROLE_PERMISSIONS["gp"] |= {"immunise", "billing"}
+ROLE_PERMISSIONS["gp"] |= {"immunise", "billing", "scribe", "reference.load"}
+ROLE_PERMISSIONS["nurse"] |= {"scribe"}
+ROLE_PERMISSIONS["practice_manager"] |= {"reference.load"}
+ROLE_PERMISSIONS["sysadmin"] |= {"reference.load"}
 ROLE_PERMISSIONS["nurse_prescriber"] = ROLE_PERMISSIONS["nurse"] | {"prescribe", "prescription.send"}
 
 PRESCRIBER_ROLES = {"gp", "nurse_prescriber"}

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import audit, irish
+from .. import audit, formulary, irish, terminology
 from ..config import settings
 from ..db import get_db
 from ..integrations import healthlink, healthmail, hl7
@@ -40,6 +40,17 @@ NOTE_FIELDS = ("subjective", "objective", "assessment", "plan", "icpc2_code", "m
                "remote_consent_recorded", "remote_identity_verified")
 
 
+def _apply_icd(db: Session, obj, data: dict) -> None:
+    """Optional ICD-10/ICD-11/SNOMED code alongside ICPC-2 (dual coding)."""
+    if "icd_code" not in data:
+        return
+    try:
+        obj.icd_system, obj.icd_code, obj.icd_title = terminology.validate(db, data.get("icd_system") or "ICD10",
+                                                                           data.get("icd_code"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 def _check_remote(c: Consultation) -> None:
     if c.mode in ("phone", "video") and c.signed_at and not (c.remote_consent_recorded and c.remote_identity_verified):
         raise HTTPException(400, "For a remote consultation, record the patient's consent and that you confirmed their identity")
@@ -57,6 +68,7 @@ def new_consultation(patient_id: int, data: dict, request: Request, user: User =
         if k in data:
             setattr(c, k, data[k])
     c.icpc2_code = code
+    _apply_icd(db, c, data)
     if data.get("sign"):
         c.signed_at = datetime.now(timezone.utc)
         _check_remote(c)
@@ -88,6 +100,7 @@ def edit_consultation(cid: int, data: dict, request: Request, user: User = Depen
         c.icpc2_code = c.icpc2_code.upper()
         if c.icpc2_code not in irish.ICPC2:
             raise HTTPException(400, "Unknown ICPC-2 code")
+    _apply_icd(db, c, data)
     if data.get("sign"):
         c.signed_at = datetime.now(timezone.utc)
         _check_remote(c)
@@ -143,18 +156,23 @@ def consultation_error(cid: int, data: dict, request: Request, user: User = Depe
 # ------------------------------------------------------------------- prescribing
 
 def _safety_checks(db: Session, patient_id: int, items: list[dict]) -> list[str]:
-    """Allergy and duplicate checks.
+    """Allergy (including drug-class) and duplicate checks.
 
-    Drug-drug interaction checking (RFC DC.2.3.1.1) needs a licensed drug knowledge base
-    (e.g. an Irish formulary product). Plug it in here; until then only these checks run.
+    Class matching uses ATC codes from the loaded medicines dictionary plus a built-in list
+    of common class members. Drug-drug interaction and dose checking (RFC DC.2.3.1.1-2)
+    need a licensed clinical knowledge base; plug it in here.
     """
     warnings = []
     allergies = db.execute(select(Allergy).where(Allergy.patient_id == patient_id)).scalars().all()
     for it in items:
-        name = (it.get("drug_name") or "").lower()
+        name = it.get("drug_name") or ""
+        product = formulary.find_by_name(db, name)
         for a in allergies:
-            if a.substance and (a.substance.lower() in name or name.split(" ")[0] in a.substance.lower()):
-                warnings.append(f"ALLERGY: patient has recorded allergy to {a.substance} ({a.reaction or 'reaction not recorded'})")
+            if formulary.allergy_matches(a.substance, name, product):
+                warnings.append(f"ALLERGY: {name} — patient has a recorded allergy to {a.substance} "
+                                f"({a.reaction or 'reaction not recorded'})")
+        if product and product.controlled_schedule and not it.get("cd_schedule"):
+            warnings.append(f"{name} is a Schedule {product.controlled_schedule[2:]} controlled drug: set the CD schedule")
     names = [(i.get("drug_name") or "").lower().split(" ")[0] for i in items]
     for n in set(names):
         if n and names.count(n) > 1:
@@ -554,8 +572,3 @@ def complete_task(task_id: int, request: Request, user: User = Depends(require("
                  ip=client_ip(request), commit=False)
     db.commit()
     return to_dict(t)
-
-
-@router.get("/icpc2")
-def icpc2(q: str = "", user: User = Depends(current_user)):
-    return irish.search_icpc2(q)

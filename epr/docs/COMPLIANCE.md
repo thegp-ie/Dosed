@@ -18,7 +18,7 @@ practice's adviser (e.g. ICGP data protection resources, Medisec or Medical Prot
 | **NIS2 Directive** (EU 2022/2555) and the Irish transposition | Cyber-security risk management for health-sector entities above the size thresholds; most single practices fall below them | Security controls below match NIS2 Art. 21 measures in any case |
 | **European Health Data Space Regulation** (EU 2025/327) | EHR systems will need harmonised interoperability and logging components, a CE-style self-certification and EU database registration. Applies in phases from 2029 (patient summaries, ePrescriptions) | Audit logging and portable export now; FHIR-based patient summary planned |
 | **Medical Device Regulation** (EU 2017/745) | Software that calculates doses or gives diagnostic advice can be a medical device | Calculators are limited to published scores (CHA₂DS₂-VASc, BMI). Dose calculation would need an MDR assessment first |
-| **EU AI Act** (EU 2024/1689) | Obligations for AI systems; medical-device AI is high-risk | No AI features. Any future AI assistant needs a separate assessment |
+| **EU AI Act** (EU 2024/1689) | Transparency (Art. 50), human oversight; medical-device AI is high-risk | The AI scribe runs on-premises, needs patient consent, and every draft is reviewed and accepted by the clinician. Notes are marked as AI-assisted. It stays a documentation aid, outside MDR. See `AI_SCRIBE.md` |
 
 ## 2. Hosting PII: what "self-hosted and compliant" means here
 
