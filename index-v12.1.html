@@ -170,7 +170,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
-              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.4</span>
+              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.1</span>
             </div>
             <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
           </div>
@@ -402,49 +402,6 @@ const WEIGHT_ESTIMATES = {
 };
 
 // Medication dose limits (manufacturer guidelines from packaging)
-/* ===========================
-   v12.4: INGREDIENT-LEVEL SAFETY LIMITS
-
-   Safety limits were previously keyed by PRODUCT NAME. Because three products
-   in the database are paracetamol and three are amoxicillin, each brand got its
-   own independent 24h allowance — so alternating Calpol and Disprol bypassed
-   every cap. Limits are now keyed by ACTIVE INGREDIENT and expressed in mg/kg,
-   which is both the real clinical limit and the only unit that can be summed
-   across products of differing concentration.
-
-   ⚕️ CLINICAL REVIEW REQUIRED — these figures need sign-off before release:
-   Paracetamol: 15 mg/kg per dose, max 4 doses/24h, 60 mg/kg/24h, 4h interval.
-   Ibuprofen:   10 mg/kg per dose, max 3 doses/24h, 30 mg/kg/24h, 6h interval.
-   Absolute ceilings cap the weight-based figure for older/heavier children.
-   Sources to verify against: BNF for Children, ICTS 2016, HSE, packaging.
-   =========================== */
-const INGREDIENT_LIMITS = {
-  paracetamol: {
-    label: 'Paracetamol',
-    mgPerKgPerDose: 15,
-    mgPerKgPerDay: 60,
-    maxDailyDoses: 4,
-    minInterval: 4,              // hours
-    absoluteMaxSingleMg: 1000,   // adult single-dose ceiling
-    absoluteMaxDailyMg: 4000,    // adult 24h ceiling
-    minAgeMonths: 2,
-    minWeightKg: 4
-  },
-  ibuprofen: {
-    label: 'Ibuprofen',
-    mgPerKgPerDose: 10,
-    mgPerKgPerDay: 30,
-    maxDailyDoses: 3,
-    minInterval: 6,
-    absoluteMaxSingleMg: 400,
-    absoluteMaxDailyMg: 1200,
-    minAgeMonths: 3,             // post-immunisation fever; otherwise 6 months
-    minWeightKg: 5
-  }
-};
-
-// Legacy per-product volume caps. Retained ONLY as a fallback for children with
-// no recorded weight, where mg/kg cannot be computed.
 const MEDICATION_LIMITS = {
   'Calpol Infant (120mg/5ml)': {
     maxSingleDose: 20,  // ml
@@ -452,8 +409,7 @@ const MEDICATION_LIMITS = {
     minInterval: 4,     // hours
     maxDailyTotal: 60,  // ml (based on 4 x 15ml max dose)
     minAge: 2,          // months
-    minWeight: 4,       // kg
-    mgPerMl: 24         // 120mg/5ml
+    minWeight: 4        // kg
   },
   'Calpol Six Plus (250mg/5ml)': {
     maxSingleDose: 10,  // ml
@@ -461,8 +417,7 @@ const MEDICATION_LIMITS = {
     minInterval: 4,
     maxDailyTotal: 40,
     minAge: 72,         // 6 years
-    minWeight: 20,
-    mgPerMl: 50         // 250mg/5ml
+    minWeight: 20
   },
   'Nurofen for Children (100mg/5ml)': {
     maxSingleDose: 15,  // ml
@@ -470,212 +425,9 @@ const MEDICATION_LIMITS = {
     minInterval: 6,
     maxDailyTotal: 30,  // ml (max 300mg/day)
     minAge: 3,          // months (for post-immunisation fever, otherwise 6 months)
-    minWeight: 5,
-    mgPerMl: 20         // 100mg/5ml
+    minWeight: 5
   }
 };
-
-// v12.4: Parse a concentration string such as '120mg/5ml' into mg per ml.
-function parseConcentration(str) {
-  if (!str) return null;
-  const m = String(str).match(/([\d.]+)\s*mg\s*\/\s*([\d.]+)\s*ml/i);
-  if (!m) return null;
-  const mg = parseFloat(m[1]), ml = parseFloat(m[2]);
-  if (!mg || !ml) return null;
-  return mg / ml;
-}
-
-// v12.4: Look up a product in the database by name.
-function getMedicineByName(name) {
-  return MEDICINES.find(m => m.name === name) || null;
-}
-
-// v12.4: The active ingredient for a product name. Falls back to a generic
-// stored on the record itself, so pre-v12.4 records still resolve.
-function getGenericFor(medicationName, record = null) {
-  const med = getMedicineByName(medicationName);
-  if (med && med.generic) return med.generic.toLowerCase();
-  if (record && record.medicationGeneric) return String(record.medicationGeneric).toLowerCase();
-  return null;
-}
-
-// v12.4: Convert a dose to MILLIGRAMS of active ingredient. This is the unit
-// that can be summed across products of different strengths. Returns null for
-// forms that cannot be converted (puffs, unknown concentration).
-function doseToMg(dose, unit, medicationName) {
-  const v = parseFloat(dose);
-  if (isNaN(v) || v < 0) return null;
-  const u = (unit || 'ml').toLowerCase();
-  if (u === 'mg') return v;
-  if (u !== 'ml') return null; // puffs, drops, tablets — not convertible here
-  const med = getMedicineByName(medicationName);
-  const mgPerMl = med ? parseConcentration(med.concentration) : null;
-  if (mgPerMl) return v * mgPerMl;
-  const legacy = MEDICATION_LIMITS[medicationName];
-  return legacy && legacy.mgPerMl ? v * legacy.mgPerMl : null;
-}
-
-// v12.4: Resolve a child's absolute mg limits from their weight. Returns null
-// when weight is unknown, so callers can fall back to per-product volume caps.
-function getIngredientLimitsForChild(generic, weightKg) {
-  const base = INGREDIENT_LIMITS[generic];
-  if (!base) return null;
-  const w = parseFloat(weightKg);
-  if (!w || w <= 0) return null;
-  return {
-    generic, label: base.label,
-    maxSingleMg: Math.min(base.mgPerKgPerDose * w, base.absoluteMaxSingleMg),
-    maxDailyMg: Math.min(base.mgPerKgPerDay * w, base.absoluteMaxDailyMg),
-    maxDailyDoses: base.maxDailyDoses,
-    minInterval: base.minInterval,
-    minAgeMonths: base.minAgeMonths,
-    minWeightKg: base.minWeightKg,
-    weightUsed: w
-  };
-}
-
-// v12.2: Administrations within this window are treated as one dose (e.g. child
-// takes half, gets the rest shortly after). v12.4: now grouped per INGREDIENT,
-// so a top-up given as a different brand still counts as the same dose.
-const TOP_UP_WINDOW_MINUTES = 60;
-
-// v12.4: Group an ingredient's administrations in the rolling 24h window,
-// ACROSS ALL PRODUCTS containing it. Amounts are summed in mg.
-function groupIngredientDoses(generic, records, refTime = Date.now()) {
-  const oneDayAgo = refTime - (24 * 60 * 60 * 1000);
-  const doses = records
-    .filter(r => {
-      const t = new Date(r.timestamp).getTime();
-      if (!(t > oneDayAgo && t <= refTime)) return false;
-      return getGenericFor(r.medication, r) === generic;
-    })
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-  const groups = [];
-  doses.forEach(d => {
-    const t = new Date(d.timestamp).getTime();
-    const mg = doseToMg(d.dose, d.unit, d.medication);
-    const last = groups[groups.length - 1];
-    if (last && (t - last.startTime) <= TOP_UP_WINDOW_MINUTES * 60 * 1000) {
-      last.totalMg += (mg || 0);
-      last.entries.push(d);
-    } else {
-      groups.push({ startTime: t, totalMg: (mg || 0), entries: [d] });
-    }
-  });
-  return groups;
-}
-
-// v12.4: Full picture of an ingredient's 24h allowance for one child.
-// The bar represents allowance CONSUMED; it drains as doses age out of the
-// rolling window, which is what makes it a countdown to the next dose.
-function getIngredientMeter(generic, records, weightKg, refTime = Date.now()) {
-  const limits = getIngredientLimitsForChild(generic, weightKg);
-  if (!limits) return null;
-
-  const groups = groupIngredientDoses(generic, records, refTime);
-  const usedMg = groups.reduce((s, g) => s + g.totalMg, 0);
-  const lastGroup = groups[groups.length - 1] || null;
-
-  // When does the oldest dose leave the window, freeing allowance?
-  const oldestExpiresAt = groups.length ? groups[0].startTime + 24 * 3600 * 1000 : null;
-  // When does the dose-count limit clear?
-  const countClearsAt = groups.length >= limits.maxDailyDoses
-    ? groups[groups.length - limits.maxDailyDoses].startTime + 24 * 3600 * 1000
-    : null;
-  // When does the minimum interval elapse?
-  const intervalClearsAt = lastGroup
-    ? lastGroup.startTime + limits.minInterval * 3600 * 1000
-    : null;
-
-  // The next dose is available once every constraint clears.
-  const blockers = [];
-  if (intervalClearsAt && intervalClearsAt > refTime) blockers.push(intervalClearsAt);
-  if (countClearsAt && countClearsAt > refTime) blockers.push(countClearsAt);
-  if (usedMg + limits.maxSingleMg > limits.maxDailyMg && oldestExpiresAt && oldestExpiresAt > refTime) {
-    blockers.push(oldestExpiresAt);
-  }
-  const nextAvailableAt = blockers.length ? Math.max.apply(null, blockers) : null;
-
-  return {
-    generic, label: limits.label,
-    usedMg, maxDailyMg: limits.maxDailyMg, maxSingleMg: limits.maxSingleMg,
-    doseCount: groups.length, maxDoses: limits.maxDailyDoses,
-    pct: Math.min(100, (usedMg / limits.maxDailyMg) * 100),
-    nextAvailableAt,
-    oldestExpiresAt,
-    weightUsed: limits.weightUsed,
-    groups
-  };
-}
-
-// v12.4: Human-readable "in 2h 15m" / "now".
-function formatCountdown(ms) {
-  if (ms <= 0) return 'now';
-  const mins = Math.ceil(ms / 60000);
-  if (mins < 60) return `in ${mins} min`;
-  const h = Math.floor(mins / 60), m = mins % 60;
-  return m === 0 ? `in ${h}h` : `in ${h}h ${m}m`;
-}
-
-// v12.4: Render the live allowance bar. Carries data attributes so it can be
-// refreshed in place by tickAllMeters() without a full re-render.
-function renderDoseMeterHTML(generic, records, weightKg, pendingMg = 0, childId = '') {
-  const m = getIngredientMeter(generic, records, weightKg);
-  if (!m) return '';
-
-  const projMg = m.usedMg + (pendingMg || 0);
-  const projPct = Math.min(100, (projMg / m.maxDailyMg) * 100);
-  const remainingMg = Math.max(0, m.maxDailyMg - projMg);
-  const barColor = projPct > 85 ? '#DC2626' : projPct > 60 ? '#F59E0B' : '#16A34A';
-
-  const brands = [...new Set(m.groups.flatMap(g => g.entries.map(e => e.medication)))];
-  const brandNote = brands.length > 1
-    ? `<div class="text-xs text-gray-500 mt-0.5">Includes ${brands.length} products: ${brands.join(', ')}</div>`
-    : '';
-
-  const nextText = m.nextAvailableAt
-    ? `Next dose ${formatCountdown(m.nextAvailableAt - Date.now())} (${formatTime(new Date(m.nextAvailableAt).toISOString())})`
-    : 'Next dose available now';
-  const nextClass = m.nextAvailableAt ? 'text-amber-700' : 'text-green-700';
-
-  return `
-    <div class="mt-2 dose-meter" data-meter-generic="${generic}" data-meter-child="${childId}" data-meter-pending="${pendingMg || 0}">
-      <div class="flex justify-between text-xs text-gray-700">
-        <span>${m.label}: ${Math.round(projMg)}mg of ${Math.round(m.maxDailyMg)}mg in 24h</span>
-        <span>${m.doseCount} of ${m.maxDoses} doses</span>
-      </div>
-      <div class="w-full bg-gray-200 rounded-full h-2.5 mt-1 overflow-hidden">
-        <div class="h-2.5 rounded-full" style="width:${projPct}%; background:${barColor}; transition: width 0.6s ease;"></div>
-      </div>
-      <div class="flex justify-between items-baseline mt-1">
-        <span class="text-xs font-medium ${nextClass}">${nextText}</span>
-        <span class="text-xs text-gray-500">${Math.round(remainingMg)}mg left today</span>
-      </div>
-      ${brandNote}
-      <div class="text-xs text-gray-400 mt-0.5">Based on ${m.weightUsed}kg</div>
-    </div>`;
-}
-
-// v12.4: Refresh every meter on screen so the bar visibly drains and the
-// countdown ticks down without the user reloading.
-function tickAllMeters() {
-  document.querySelectorAll('.dose-meter').forEach(el => {
-    const generic = el.getAttribute('data-meter-generic');
-    const childId = el.getAttribute('data-meter-child');
-    const pending = parseFloat(el.getAttribute('data-meter-pending')) || 0;
-    if (!generic || !childId) return;
-    const child = state.children.find(c => c.id === childId);
-    if (!child) return;
-    const html = renderDoseMeterHTML(generic, getRecordsForChild(childId), child.weight, pending, childId);
-    if (html) {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html.trim();
-      el.innerHTML = tmp.firstChild.innerHTML;
-    }
-  });
-}
-setInterval(tickAllMeters, 30000); // every 30 seconds
 
 const MEDICINES = [
   { 
@@ -859,29 +611,6 @@ function saveData({ children, records, prescriptions }) {
 
 let state = loadData();
 
-// v12.2 migration: infer weightUpdatedAt for existing children from their
-// most recent record that included a weight. Runs once; harmless if repeated.
-(function migrateWeightDates() {
-  let changed = false;
-  state.children.forEach(child => {
-    if (child.weight && !child.weightUpdatedAt) {
-      const weightRecords = state.records
-        .filter(r => r.childId === child.id && r.weight)
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      if (weightRecords.length > 0) {
-        child.weightUpdatedAt = weightRecords[0].timestamp;
-        changed = true;
-      }
-    }
-  });
-  if (changed) saveData(state);
-})();
-
-// v12.2: Ask the browser not to evict our localStorage under storage pressure
-if (navigator.storage && navigator.storage.persist) {
-  navigator.storage.persist().catch(() => {});
-}
-
 /* ===========================
    v12 Global Variables
    =========================== */
@@ -908,71 +637,6 @@ function formatDateTime(iso) {
 function formatTime(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-}
-
-/* ===========================
-   v12.3: Age derived from date of birth
-   Age was previously a static number typed once and never updated, while the
-   birthDate field was captured but never read. A stale age silently feeds the
-   medication minimum-age checks AND the age-banded heart rate / respiratory
-   rate normal ranges, so it must be derived whenever a birth date exists.
-   =========================== */
-
-// Whole months between a date of birth and now (partial months not counted).
-function monthsSince(birthDate) {
-  const dob = new Date(birthDate);
-  if (isNaN(dob.getTime())) return null;
-  const now = new Date();
-  if (dob > now) return null; // guard against future dates
-  let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
-  if (now.getDate() < dob.getDate()) months--; // birthday-in-month not yet reached
-  return Math.max(0, months);
-}
-
-// Canonical age in months. Prefers date of birth; falls back to the manually
-// entered age in years for children saved before v12.3 or with no DOB known.
-function getChildAgeMonths(child) {
-  if (!child) return null;
-  if (child.birthDate) {
-    const m = monthsSince(child.birthDate);
-    if (m !== null) return m;
-  }
-  const yrs = parseFloat(child.age);
-  return isNaN(yrs) ? null : yrs * 12;
-}
-
-// Canonical age in years (decimal), for the dose validator.
-function getChildAgeYears(child) {
-  const m = getChildAgeMonths(child);
-  return m === null ? null : m / 12;
-}
-
-// Human-readable age. Infants are described in months/weeks, where the
-// difference is clinically meaningful — "0.3" is not a useful age for a baby.
-function formatAge(child) {
-  const m = getChildAgeMonths(child);
-  if (m === null) return 'Not set';
-  if (m < 1) {
-    if (child && child.birthDate) {
-      const days = Math.floor((Date.now() - new Date(child.birthDate).getTime()) / 86400000);
-      if (days < 14) return `${days} day${days === 1 ? '' : 's'}`;
-      return `${Math.floor(days / 7)} weeks`;
-    }
-    return 'Under 1 month';
-  }
-  if (m < 24) return `${Math.round(m)} month${Math.round(m) === 1 ? '' : 's'}`;
-  const years = Math.floor(m / 12);
-  const rem = Math.round(m % 12);
-  if (rem === 0) return `${years} year${years === 1 ? '' : 's'}`;
-  return `${years}y ${rem}m`;
-}
-
-// v12.2: Short date for compact displays, e.g. "14 May" or "14 May 2025" if not this year
-function formatShortDate(iso) {
-  const d = new Date(iso);
-  const opts = { day: 'numeric', month: 'short' };
-  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-  return d.toLocaleDateString('en-GB', opts);
 }
 
 function getTimeUntil(futureISO) {
@@ -1110,129 +774,86 @@ function validateWeight(weight, ageMonths) {
   };
 }
 
-function validateMedicationDose(medication, dose, childAge, childWeight, recentDoses = [], unit = 'ml', atTime = null) {
-  const now = atTime ? new Date(atTime).getTime() : Date.now();
+function validateMedicationDose(medication, dose, childAge, childWeight, recentDoses = []) {
+  const limits = MEDICATION_LIMITS[medication];
+  if (!limits) return { valid: true, message: '' };
+  
+  const doseVal = parseFloat(dose);
   const ageMonths = parseFloat(childAge) * 12;
   const weight = parseFloat(childWeight);
-  const generic = getGenericFor(medication);
-  const base = generic ? INGREDIENT_LIMITS[generic] : null;
-
-  // No ingredient-level rules for this product (antibiotics, inhalers, etc.)
-  if (!base) return { valid: true, message: '' };
-
+  
   // Age check
-  if (!isNaN(ageMonths) && ageMonths < base.minAgeMonths) {
+  if (ageMonths < limits.minAge) {
     return {
       valid: false,
       severity: 'critical',
-      message: `\u26a0\ufe0f CONTRAINDICATED: Child too young for ${base.label} (minimum age: ${base.minAgeMonths} months)`
+      message: `⚠️ CONTRAINDICATED: Child too young (minimum age: ${limits.minAge} months)`
     };
   }
-
+  
   // Weight check
-  if (weight && weight < base.minWeightKg) {
+  if (weight && weight < limits.minWeight) {
     return {
       valid: false,
       severity: 'critical',
-      message: `\u26a0\ufe0f CONTRAINDICATED: Child too light for ${base.label} (minimum weight: ${base.minWeightKg} kg)`
+      message: `⚠️ CONTRAINDICATED: Child too light (minimum weight: ${limits.minWeight} kg)`
     };
   }
-
-  // v12.4: Weight is required for mg/kg limits. Without it we cannot compute a
-  // safe ceiling, so say so rather than silently allowing the dose.
-  const limits = getIngredientLimitsForChild(generic, weight);
-  if (!limits) {
-    return {
-      valid: true,
-      severity: 'warning',
-      message: `\u26a0\ufe0f Add this child's weight to check ${base.label} against safe mg/kg limits. Without it, doses are not being checked.`
-    };
-  }
-
-  // Convert to mg of active ingredient
-  const doseMg = doseToMg(dose, unit, medication);
-  if (doseMg === null) {
-    return {
-      valid: true,
-      severity: 'warning',
-      message: `\u26a0\ufe0f Cannot convert a dose in "${unit}" to mg for this product. Please check the packaging.`
-    };
-  }
-
-  // v12.4: Aggregate ACROSS ALL PRODUCTS sharing this ingredient
-  const groups = groupIngredientDoses(generic, recentDoses, now);
-  const lastGroup = groups[groups.length - 1] || null;
-  const isTopUp = lastGroup && (now - lastGroup.startTime) <= TOP_UP_WINDOW_MINUTES * 60 * 1000;
-  const usedMg = groups.reduce((s, g) => s + g.totalMg, 0);
-
-  // Name the other products involved, so a cross-brand warning is explicit
-  const otherBrands = [...new Set(groups.flatMap(g => g.entries.map(e => e.medication)))]
-    .filter(b => b !== medication);
-  const crossNote = otherBrands.length
-    ? ` Already given today as ${otherBrands.join(', ')} \u2014 same active ingredient.`
-    : '';
-
-  // Single dose (combined, if this is a top-up)
-  if (isTopUp) {
-    if (lastGroup.totalMg + doseMg > limits.maxSingleMg) {
-      return {
-        valid: false,
-        severity: 'critical',
-        message: `\u26a0\ufe0f Combined with the ${formatTime(new Date(lastGroup.startTime).toISOString())} dose this exceeds the maximum single dose of ${base.label} (${Math.round(lastGroup.totalMg + doseMg)}mg > ${Math.round(limits.maxSingleMg)}mg for ${weight}kg)`
-      };
-    }
-  } else if (doseMg > limits.maxSingleMg) {
+  
+  // Single dose check
+  if (doseVal > limits.maxSingleDose) {
     return {
       valid: false,
       severity: 'critical',
-      message: `\u26a0\ufe0f EXCEEDS maximum single dose of ${base.label} (${Math.round(doseMg)}mg > ${Math.round(limits.maxSingleMg)}mg for ${weight}kg)`
+      message: `⚠️ EXCEEDS maximum single dose (max: ${limits.maxSingleDose}ml)`
     };
   }
-
-  // Daily total, summed across all products with this ingredient
-  if (usedMg + doseMg > limits.maxDailyMg) {
+  
+  // Check recent doses in last 24 hours
+  const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+  const recentSameMed = recentDoses.filter(r => 
+    r.medication === medication && 
+    new Date(r.timestamp).getTime() > oneDayAgo
+  );
+  
+  if (recentSameMed.length >= limits.maxDailyDoses) {
     return {
       valid: false,
       severity: 'critical',
-      message: `\u26a0\ufe0f Would EXCEED the 24h maximum for ${base.label} (${Math.round(usedMg)}mg + ${Math.round(doseMg)}mg > ${Math.round(limits.maxDailyMg)}mg for ${weight}kg).${crossNote}`
+      message: `⚠️ MAXIMUM daily doses reached (${limits.maxDailyDoses} doses/24h)`
     };
   }
-
-  if (isTopUp) {
-    return {
-      valid: true,
-      severity: 'normal',
-      message: `\u2713 Recorded as a top-up of the ${formatTime(new Date(lastGroup.startTime).toISOString())} dose (combined: ${Math.round(lastGroup.totalMg + doseMg)}mg)`
-    };
-  }
-
-  // Dose count, across all products
-  if (groups.length >= limits.maxDailyDoses) {
-    const clearsAt = new Date(groups[groups.length - limits.maxDailyDoses].startTime + 24 * 3600 * 1000);
-    return {
-      valid: false,
-      severity: 'critical',
-      message: `\u26a0\ufe0f MAXIMUM daily doses of ${base.label} reached (${limits.maxDailyDoses} in 24h). Next dose from ${formatTime(clearsAt.toISOString())}.${crossNote}`
-    };
-  }
-
-  // Minimum interval, from the start of the last dose of this ingredient
-  if (lastGroup) {
-    const hoursSince = (now - lastGroup.startTime) / 3600000;
+  
+  // Check interval since last dose
+  if (recentSameMed.length > 0) {
+    const lastDose = recentSameMed.sort((a,b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    )[0];
+    const hoursSince = (Date.now() - new Date(lastDose.timestamp).getTime()) / (1000 * 60 * 60);
+    
     if (hoursSince < limits.minInterval) {
-      const readyAt = new Date(lastGroup.startTime + limits.minInterval * 3600 * 1000);
       return {
         valid: false,
         severity: 'critical',
-        message: `\u26a0\ufe0f TOO SOON for ${base.label}: next dose from ${formatTime(readyAt.toISOString())} (${limits.minInterval}h between doses).${crossNote}`
+        message: `⚠️ TOO SOON: Wait ${Math.ceil(limits.minInterval - hoursSince)} more hour(s) (minimum ${limits.minInterval}h between doses)`
       };
     }
   }
-
+  
+  // Calculate total today
+  const totalToday = recentSameMed.reduce((sum, r) => sum + parseFloat(r.dose || 0), 0);
+  if (totalToday + doseVal > limits.maxDailyTotal) {
+    return {
+      valid: false,
+      severity: 'critical',
+      message: `⚠️ Would EXCEED daily maximum (${totalToday.toFixed(1)}ml + ${doseVal}ml > ${limits.maxDailyTotal}ml/24h)`
+    };
+  }
+  
   return {
     valid: true,
     severity: 'normal',
-    message: `\u2713 ${Math.round(doseMg)}mg of ${base.label} \u2014 within safe limits for ${weight}kg`
+    message: `✓ Dose within safe limits`
   };
 }
 
@@ -1745,7 +1366,6 @@ function renderChildren() {
                 <div class="text-xs font-semibold mt-2 ${timeUntil.isPast ? 'text-red-700' : timeUntil.hours === 0 && timeUntil.minutes <= 15 ? 'text-green-700' : timeUntil.hours === 0 && timeUntil.minutes <= 30 ? 'text-amber-700' : 'text-blue-700'}">
                   ${statusIcon} ${statusText}
                 </div>
-                ${(() => { const g = getGenericFor(med.name); return (g && INGREDIENT_LIMITS[g]) ? renderDoseMeterHTML(g, getRecordsForChild(child.id), child.weight, 0, child.id) : ''; })()}
                 ${recentDosesHTML}
               </div>
               <i data-lucide="pill" class="w-5 h-5 text-gray-400 ml-2"></i>
@@ -1761,14 +1381,7 @@ function renderChildren() {
         <div class="flex justify-between items-start mb-2">
           <div>
             <h3 class="text-lg font-bold flex items-center">${escapeHtml(child.name)}${abnormalBadge}</h3>
-            <div class="text-sm text-gray-600">Age: ${formatAge(child)} ${child.weight ? `• ${child.weight} kg${(() => {
-              if (!child.weightUpdatedAt) return '';
-              const days = (Date.now() - new Date(child.weightUpdatedAt).getTime()) / (1000 * 60 * 60 * 24);
-              const dateStr = formatShortDate(child.weightUpdatedAt);
-              return days > 90
-                ? ` <span class="text-amber-600">(weighed ${dateStr})</span>`
-                : ` <span class="text-gray-400">(${dateStr})</span>`;
-            })()}` : ''}</div>
+            <div class="text-sm text-gray-600">Age: ${child.age || 'Not set'} ${child.weight ? `• ${child.weight} kg` : ''}</div>
           </div>
           <button class="btn-delete-child text-red-500 hover:text-red-700" data-id="${child.id}">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -2053,7 +1666,7 @@ function exportToCSV(childId) {
   
   let csv = 'Dosed Health Records Export\n';
   csv += `Child: ${child.name}\n`;
-  csv += `Age: ${formatAge(child)}\n`;
+  csv += `Age: ${child.age || 'Not set'}\n`;
   csv += `Weight: ${child.weight || 'Not set'} kg\n`;
   csv += `Export Date: ${new Date().toLocaleString('en-GB')}\n\n`;
   
@@ -2227,7 +1840,7 @@ function exportData(childId) {
 
   let text = `*DOSED - MEDICAL SUMMARY*\n\n`;
   text += `*Child:* ${child.name}\n`;
-  text += `*Age:* ${formatAge(child)}\n`;
+  text += `*Age:* ${child.age || 'Not set'}\n`;
   if (child.weight) text += `*Weight:* ${child.weight} kg\n`;
   
   if (child.conditions && child.conditions.length) {
@@ -2318,14 +1931,9 @@ function openChildModal(mode='add', child = null) {
         <span class="text-sm font-medium">Name *</span>
         <input id="ch_name" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(name)}">
       </label>
-      <label class="block">
-        <span class="text-sm font-medium">Date of birth</span>
-        <input id="ch_birthDate" type="date" max="${new Date().toISOString().split('T')[0]}" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(birthDate)}">
-        <div id="ageReadout" class="text-xs mt-1 text-gray-600">Age updates automatically from the date of birth.</div>
-      </label>
       <div class="grid grid-cols-2 gap-3">
         <label class="block">
-          <span class="text-sm font-medium">Age (years) <span class="text-gray-500 font-normal">if date of birth unknown</span></span>
+          <span class="text-sm font-medium">Age (years)</span>
           <input id="ch_age" type="number" min="0" max="18" step="0.1" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(age)}">
         </label>
         <label class="block">
@@ -2334,6 +1942,10 @@ function openChildModal(mode='add', child = null) {
           <div id="weightValidation" class="text-xs mt-1 hidden"></div>
         </label>
       </div>
+      <label class="block">
+        <span class="text-sm font-medium">Birth Date</span>
+        <input id="ch_birthDate" type="date" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(birthDate)}">
+      </label>
       <label class="block">
         <span class="text-sm font-medium">Medical Conditions <span class="text-gray-500">(comma separated)</span></span>
         <input id="ch_conditions" class="mt-1 block w-full border rounded px-3 py-2" value="${escapeAttr(conditions)}">
@@ -2365,16 +1977,15 @@ function openChildModal(mode='add', child = null) {
     const weightInput = document.getElementById('ch_weight');
     const validationDiv = document.getElementById('weightValidation');
     
+    const age = parseFloat(ageInput.value);
     const weight = parseFloat(weightInput.value);
-    // v12.3: prefer the date of birth over the typed age
-    const dobVal = document.getElementById('ch_birthDate').value;
-    const ageMonths = getChildAgeMonths({ birthDate: dobVal, age: ageInput.value });
     
-    if (!ageMonths || !weight) {
+    if (!age || !weight) {
       validationDiv.classList.add('hidden');
       return;
     }
     
+    const ageMonths = age * 12;
     const validation = validateWeight(weight, ageMonths);
     
     if (validation.severity === 'critical') {
@@ -2395,41 +2006,13 @@ function openChildModal(mode='add', child = null) {
     validationDiv.classList.remove('hidden');
   };
   
-  // v12.3: live age readout driven by the date of birth
-  const syncAgeFromDob = () => {
-    const dobInput = document.getElementById('ch_birthDate');
-    const ageInput = document.getElementById('ch_age');
-    const readout = document.getElementById('ageReadout');
-    const dobVal = dobInput.value;
-    
-    if (dobVal) {
-      const months = monthsSince(dobVal);
-      if (months === null) {
-        readout.textContent = 'That date is in the future — please check it.';
-        readout.className = 'text-xs mt-1 text-red-600';
-        ageInput.disabled = false;
-        return;
-      }
-      readout.textContent = `Age: ${formatAge({ birthDate: dobVal })} — kept up to date automatically.`;
-      readout.className = 'text-xs mt-1 text-green-700';
-      // The manual field becomes redundant: show the derived value, lock it
-      ageInput.value = (months / 12).toFixed(1);
-      ageInput.disabled = true;
-      ageInput.classList.add('bg-gray-100', 'text-gray-500');
-    } else {
-      readout.textContent = 'No date of birth set — age below will not update on its own.';
-      readout.className = 'text-xs mt-1 text-amber-700';
-      ageInput.disabled = false;
-      ageInput.classList.remove('bg-gray-100', 'text-gray-500');
-    }
-    validateWeightInput();
-  };
-  
-  document.getElementById('ch_birthDate').oninput = syncAgeFromDob;
   document.getElementById('ch_age').oninput = validateWeightInput;
   document.getElementById('ch_weight').oninput = validateWeightInput;
   
-  setTimeout(syncAgeFromDob, 50);
+  // Trigger initial validation if editing
+  if (isEdit && age && weight) {
+    setTimeout(validateWeightInput, 100);
+  }
   
   document.getElementById('btnSaveChild').onclick = () => {
     const childData = {
@@ -2443,24 +2026,6 @@ function openChildModal(mode='add', child = null) {
     };
     
     if (!childData.name) return alert('Please enter a name');
-    
-    // v12.3: keep the stored age consistent with the date of birth. The age
-    // field remains populated for exports and legacy data, but the date of
-    // birth is the source of truth whenever it is present.
-    if (childData.birthDate) {
-      const months = monthsSince(childData.birthDate);
-      if (months === null) return alert('Date of birth cannot be in the future. Please check the date.');
-      childData.age = (months / 12).toFixed(1);
-    }
-    
-    // v12.2: track when weight was last measured
-    if (childData.weight) {
-      if (isEdit && child.weight === childData.weight && child.weightUpdatedAt) {
-        childData.weightUpdatedAt = child.weightUpdatedAt; // unchanged — keep original date
-      } else {
-        childData.weightUpdatedAt = new Date().toISOString();
-      }
-    }
     
     if (isEdit) {
       childData.id = child.id;
@@ -2783,9 +2348,9 @@ function openRecordModal(childId) {
   // Dose recommendation
   document.getElementById('rec_med').onchange = (e) => {
     const medName = e.target.value;
-    runDoseValidation(); // v12.2: refresh 24h meter/validation on medication change
     if (!medName || !child.weight) {
       document.getElementById('doseRecommendation').classList.add('hidden');
+      document.getElementById('doseValidation').classList.add('hidden');
       return;
     }
     
@@ -2811,7 +2376,7 @@ function openRecordModal(childId) {
   };
   
   // Real-time vital sign validation
-  const ageMonths = getChildAgeMonths(child) || 0; // v12.3: derived from DOB where known
+  const ageMonths = (parseFloat(child.age) || 0) * 12;
   
   document.getElementById('rec_temp').oninput = (e) => {
     const temp = e.target.value;
@@ -2899,45 +2464,32 @@ function openRecordModal(childId) {
     validationDiv.classList.remove('hidden');
   };
   
-  // Real-time medication dose validation (v12.2: unit-aware, with live 24h meter)
-  const runDoseValidation = () => {
+  // Real-time medication dose validation
+  document.getElementById('rec_dose').oninput = () => {
     const medication = document.getElementById('rec_med').value;
     const dose = document.getElementById('rec_dose').value;
-    const unit = document.getElementById('rec_unit').value;
-    const validationDiv = document.getElementById('doseValidation');
-    const childRecords = getRecordsForChild(childId);
     
     if (!medication || !dose) {
-      // Still show the meter for a selected medication with limits, even before a dose is typed
-      const g0 = medication ? getGenericFor(medication) : null;
-      if (g0 && INGREDIENT_LIMITS[g0]) {
-        validationDiv.className = 'bg-gray-50 border-l-4 border-gray-300 p-3 rounded';
-        validationDiv.innerHTML = renderDoseMeterHTML(getGenericFor(medication), childRecords, child.weight, 0, childId);
-        validationDiv.classList.remove('hidden');
-      } else {
-        validationDiv.classList.add('hidden');
-      }
+      document.getElementById('doseValidation').classList.add('hidden');
       return;
     }
     
-    const validation = validateMedicationDose(medication, dose, getChildAgeYears(child), child.weight, childRecords, unit);
-    const pendingMg = doseToMg(dose, unit, medication) || 0;
-    const meterHTML = renderDoseMeterHTML(getGenericFor(medication), childRecords, child.weight, pendingMg, childId);
+    const childRecords = getRecordsForChild(childId);
+    const validation = validateMedicationDose(medication, dose, child.age, child.weight, childRecords);
+    const validationDiv = document.getElementById('doseValidation');
     
     if (validation.severity === 'critical') {
       validationDiv.className = 'bg-red-50 border-l-4 border-red-500 p-3 rounded';
-      validationDiv.innerHTML = `<div class="text-sm text-red-800 font-semibold">${validation.message}</div>${meterHTML}`;
+      validationDiv.innerHTML = `<div class="text-sm text-red-800 font-semibold">${validation.message}</div>`;
     } else if (validation.severity === 'warning') {
       validationDiv.className = 'bg-orange-50 border-l-4 border-orange-500 p-3 rounded';
-      validationDiv.innerHTML = `<div class="text-sm text-orange-800">${validation.message}</div>${meterHTML}`;
+      validationDiv.innerHTML = `<div class="text-sm text-orange-800">${validation.message}</div>`;
     } else if (validation.message) {
       validationDiv.className = 'bg-green-50 border-l-4 border-green-500 p-3 rounded';
-      validationDiv.innerHTML = `<div class="text-sm text-green-800">${validation.message}</div>${meterHTML}`;
+      validationDiv.innerHTML = `<div class="text-sm text-green-800">${validation.message}</div>`;
     }
     validationDiv.classList.remove('hidden');
   };
-  document.getElementById('rec_dose').oninput = runDoseValidation;
-  document.getElementById('rec_unit').onchange = runDoseValidation;
   
   // Save record
   document.getElementById('btnSaveRecord').onclick = () => {
@@ -2964,24 +2516,11 @@ function openRecordModal(childId) {
       photo: currentPhotoData || null // v12: Add photo if uploaded
     };
     
-    // v12.2: Safety check at save time (unit-aware, evaluated at the record's
-    // actual timestamp so backdated entries validate against the right window).
-    // Advisory, not blocking — the dose may already have been given.
-    if (medication && rec.dose) {
-      const priorRecords = getRecordsForChild(childId);
-      const v = validateMedicationDose(medication, rec.dose, getChildAgeYears(child), child.weight, priorRecords, rec.unit, timestamp);
-      if (v.severity === 'critical') {
-        const proceed = confirm(`${v.message}\n\nRecord this dose anyway? (Choose OK only if the dose has already been given — this keeps your history accurate.)`);
-        if (!proceed) return;
-      }
-    }
-    
     // Update child's current weight if recorded
     if (rec.weight) {
       const child = state.children.find(c => c.id === childId);
       if (child) {
         child.weight = rec.weight;
-        child.weightUpdatedAt = timestamp; // v12.2: track when weight was last measured
         saveData(state);
       }
     }
