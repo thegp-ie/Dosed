@@ -170,7 +170,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
-              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.5</span>
+              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.6</span>
             </div>
             <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
           </div>
@@ -259,11 +259,14 @@
       <div id="chartArea" class="hidden">
         <!-- Time Range Filter -->
         <div class="flex gap-2 mb-4 flex-wrap">
+          <button class="chart-filter-btn hidden" data-range="episode">Latest Episode</button>
           <button class="chart-filter-btn active" data-range="all">All Time</button>
           <button class="chart-filter-btn" data-range="7">Past Week</button>
           <button class="chart-filter-btn" data-range="30">Past Month</button>
           <button class="chart-filter-btn" data-range="90">Past 3 Months</button>
         </div>
+        
+        <div id="episodeSummary" class="hidden mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-sm text-blue-900"></div>
         
         <div class="space-y-6">
           <div>
@@ -3305,14 +3308,132 @@ if (typeof Chart !== 'undefined') {
 }
 
 let currentChartRange = 'all'; // Global variable for chart time range
+let chartRangeChosenByUser = false; // v12.6: until the user picks a range, open on the latest episode
+
+/* v12.6: Illness episodes.
+   An episode is a run of "acute" records (temperature, medication, symptoms,
+   heart or respiratory rate) with no gap longer than EPISODE_GAP_HOURS.
+   Weight-only records don't start or extend an episode. */
+const EPISODE_GAP_HOURS = 48;
+const EPISODE_RECENT_DAYS = 14; // auto-open on an episode that ended within this window
+const EPISODE_PAD_MS = 6 * 3600 * 1000;
+
+function isAcuteRecord(r) {
+  return !!(r.temperature || r.medication || (r.symptoms && r.symptoms.length) || r.heartRate || r.respRate);
+}
+
+function findLatestEpisode(records = state.records) {
+  const acute = records
+    .filter(isAcuteRecord)
+    .map(r => new Date(r.timestamp).getTime())
+    .filter(t => !isNaN(t))
+    .sort((a, b) => a - b);
+  if (acute.length === 0) return null;
+  const gapMs = EPISODE_GAP_HOURS * 3600 * 1000;
+  const end = acute[acute.length - 1];
+  let start = end;
+  for (let i = acute.length - 2; i >= 0; i--) {
+    if (start - acute[i] > gapMs) break;
+    start = acute[i];
+  }
+  return { start, end, isRecent: Date.now() - end <= EPISODE_RECENT_DAYS * 24 * 3600 * 1000 };
+}
+
+// Insert a null point wherever consecutive readings are > EPISODE_GAP_HOURS apart,
+// so Chart.js breaks the line instead of joining separate illnesses.
+function breakLineAtGaps(points) {
+  const gapMs = EPISODE_GAP_HOURS * 3600 * 1000;
+  const out = [];
+  points.forEach((p, i) => {
+    if (i > 0 && p.x - points[i - 1].x > gapMs) {
+      out.push({ x: new Date((p.x.getTime() + points[i - 1].x.getTime()) / 2), y: null });
+    }
+    out.push(p);
+  });
+  return out;
+}
+
+function formatDuration(ms) {
+  const h = Math.round(ms / 3600000);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d > 1 ? 's' : ''}${h % 24 ? ` ${h % 24}h` : ''}`;
+}
+
+function vitalsTimeAxis() {
+  const shortRange = currentChartRange === 'episode' || currentChartRange === '7';
+  return {
+    type: 'time',
+    time: shortRange
+      ? { unit: 'hour', displayFormats: { hour: 'MMM d, HH:mm' } }
+      : { displayFormats: { hour: 'MMM d, HH:mm', day: 'MMM d', week: 'MMM d', month: 'MMM yyyy' } },
+    title: { display: true, text: 'Time' }
+  };
+}
+
+function setActiveChartFilter(range) {
+  currentChartRange = range;
+  document.querySelectorAll('.chart-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === range);
+  });
+}
+
+function renderEpisodeSummary(episode) {
+  const box = document.getElementById('episodeSummary');
+  if (!box) return;
+  if (currentChartRange !== 'episode' || !episode) {
+    box.classList.add('hidden');
+    return;
+  }
+  const ongoing = Date.now() - episode.end < 24 * 3600 * 1000;
+  const inEpisode = r => {
+    const t = new Date(r.timestamp).getTime();
+    return t >= episode.start && t <= episode.end;
+  };
+  const lines = state.children.map(child => {
+    const recs = state.records.filter(r => r.childId === child.id && inEpisode(r));
+    if (!recs.some(isAcuteRecord)) return null;
+    const temps = recs.map(r => parseFloat(r.temperature)).filter(t => !isNaN(t));
+    const doses = recs.filter(r => r.medication);
+    const byGeneric = {};
+    doses.forEach(r => {
+      const key = r.medicationGeneric || r.medication;
+      byGeneric[key] = (byGeneric[key] || 0) + 1;
+    });
+    const doseText = doses.length
+      ? `${doses.length} dose${doses.length > 1 ? 's' : ''} (${Object.entries(byGeneric).map(([k, n]) => `${n} ${escapeHtml(k)}`).join(', ')})`
+      : 'no doses';
+    const peak = temps.length ? `peak ${Math.max(...temps).toFixed(1)}°C` : 'no temperatures';
+    return `<div><strong>${escapeHtml(child.name)}:</strong> ${peak}, ${doseText}</div>`;
+  }).filter(Boolean);
+  box.innerHTML = `
+    <div class="font-semibold mb-1">${ongoing ? 'Current episode' : 'Latest episode'}:
+      ${formatDateTime(new Date(episode.start).toISOString())} → ${ongoing ? 'now' : formatDateTime(new Date(episode.end).toISOString())}
+      (${formatDuration((ongoing ? Date.now() : episode.end) - episode.start)})</div>
+    ${lines.join('')}`;
+  box.classList.remove('hidden');
+}
 
 function renderCharts() {
   // Get time cutoff based on selected range
   let cutoffTime = null;
-  if (currentChartRange !== 'all') {
+  const episode = findLatestEpisode();
+  const episodeBtn = document.querySelector('.chart-filter-btn[data-range="episode"]');
+  if (episodeBtn) episodeBtn.classList.toggle('hidden', !episode);
+  
+  // v12.6: open on the latest episode if it's recent and the user hasn't picked a range
+  if (!chartRangeChosenByUser) {
+    setActiveChartFilter(episode && episode.isRecent ? 'episode' : 'all');
+  }
+  if (currentChartRange === 'episode' && !episode) setActiveChartFilter('all');
+  
+  if (currentChartRange === 'episode') {
+    cutoffTime = episode.start - EPISODE_PAD_MS;
+  } else if (currentChartRange !== 'all') {
     const days = parseInt(currentChartRange);
     cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
   }
+  renderEpisodeSummary(episode);
   
   // Get all records, filtered by time range if set
   const allRecords = state.records
@@ -3341,6 +3462,7 @@ function renderCharts() {
   const hrDatasets = [];
   const rrDatasets = [];
   const weightDatasets = [];
+  const doseMarkers = []; // v12.6: medication doses shown on the temperature chart
   
   // Track min/max temps for dynamic Y-axis
   let minTemp = Infinity;
@@ -3361,7 +3483,7 @@ function renderCharts() {
       
       tempDatasets.push({
         label: child.name + ' (°C)',
-        data: tempData,
+        data: breakLineAtGaps(tempData),
         borderColor: childColors[idx % childColors.length],
         backgroundColor: childColors[idx % childColors.length] + '20',
         tension: 0.3,
@@ -3370,15 +3492,26 @@ function renderCharts() {
       });
     }
     
+    // v12.6: Medication doses
+    childRecords.filter(r => r.medication).forEach(r => {
+      doseMarkers.push({
+        x: new Date(r.timestamp),
+        child: child.name,
+        med: r.medication,
+        generic: (r.medicationGeneric || '').toLowerCase(),
+        dose: r.dose ? `${r.dose}${r.unit || ''}` : ''
+      });
+    });
+    
     // Heart Rate dataset
     const hrRecords = childRecords.filter(r => r.heartRate);
     if (hrRecords.length > 0) {
       hrDatasets.push({
         label: child.name + ' (bpm)',
-        data: hrRecords.map(r => ({ 
+        data: breakLineAtGaps(hrRecords.map(r => ({ 
           x: new Date(r.timestamp), 
           y: parseInt(r.heartRate) 
-        })),
+        }))),
         borderColor: childColors[idx % childColors.length],
         backgroundColor: childColors[idx % childColors.length] + '20',
         tension: 0.3,
@@ -3392,10 +3525,10 @@ function renderCharts() {
     if (rrRecords.length > 0) {
       rrDatasets.push({
         label: child.name + ' (/min)',
-        data: rrRecords.map(r => ({ 
+        data: breakLineAtGaps(rrRecords.map(r => ({ 
           x: new Date(r.timestamp), 
           y: parseInt(r.respRate) 
-        })),
+        }))),
         borderColor: childColors[idx % childColors.length],
         backgroundColor: childColors[idx % childColors.length] + '20',
         tension: 0.3,
@@ -3443,6 +3576,50 @@ function renderCharts() {
     if (minTemp < 35) tempYMin = Math.floor(minTemp - padding);
   }
   
+  // v12.6: fever threshold line and dose markers on the temperature chart
+  if (tempDatasets.length > 0) {
+    const allX = tempDatasets.flatMap(d => d.data.map(p => p.x.getTime()))
+      .concat(doseMarkers.map(m => m.x.getTime()));
+    const xMin = new Date(Math.min(...allX));
+    const xMax = new Date(Math.max(...allX));
+    tempDatasets.push({
+      label: 'Fever (38°C)',
+      data: [{ x: xMin, y: 38 }, { x: xMax, y: 38 }],
+      borderColor: '#DC2626',
+      borderDash: [6, 4],
+      borderWidth: 1,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      fill: false,
+      isReference: true
+    });
+    const doseGroups = [
+      { key: 'paracetamol', label: 'Paracetamol dose', color: '#2563EB' },
+      { key: 'ibuprofen', label: 'Ibuprofen dose', color: '#D97706' },
+      { key: 'other', label: 'Other medication', color: '#6B7280' }
+    ];
+    const markerY = tempYMin + 0.25;
+    doseGroups.forEach(g => {
+      const pts = doseMarkers
+        .filter(m => (m.generic === g.key) || (g.key === 'other' && m.generic !== 'paracetamol' && m.generic !== 'ibuprofen'))
+        .map(m => ({ x: m.x, y: markerY, dose: m }));
+      if (pts.length === 0) return;
+      tempDatasets.push({
+        type: 'scatter',
+        label: g.label,
+        data: pts,
+        showLine: false,
+        pointStyle: 'triangle',
+        pointRadius: 7,
+        pointHoverRadius: 9,
+        borderColor: g.color,
+        backgroundColor: g.color,
+        isDose: true
+      });
+    });
+  }
+  const showTempLegend = state.children.length > 1 || doseMarkers.length > 0;
+  
   setTimeout(() => {
     // Temperature Chart
     if (tempDatasets.length > 0) {
@@ -3455,14 +3632,7 @@ function renderCharts() {
           animation: false,
           transitions: { active: { animation: { duration: 0 } } },
           scales: {
-            x: {
-              type: 'time',
-              time: {
-                unit: 'hour',
-                displayFormats: { hour: 'MMM d, HH:mm' }
-              },
-              title: { display: true, text: 'Time' }
-            },
+            x: vitalsTimeAxis(),
             y: {
               min: tempYMin,
               max: tempYMax,
@@ -3475,10 +3645,19 @@ function renderCharts() {
             }
           },
           plugins: {
-            legend: { display: state.children.length > 1 },
+            legend: {
+              display: showTempLegend,
+              labels: { usePointStyle: true, filter: item => item.text !== 'Fever (38°C)' }
+            },
             tooltip: {
+              filter: item => !item.dataset.isReference,
               callbacks: {
                 label: function(context) {
+                  const d = context.raw && context.raw.dose;
+                  if (d) {
+                    const who = state.children.length > 1 ? d.child + ': ' : '';
+                    return `${who}💊 ${d.med}${d.dose ? ' ' + d.dose : ''}`;
+                  }
                   return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '°C';
                 }
               }
@@ -3499,14 +3678,7 @@ function renderCharts() {
           animation: false,
           transitions: { active: { animation: { duration: 0 } } },
           scales: {
-            x: {
-              type: 'time',
-              time: {
-                unit: 'hour',
-                displayFormats: { hour: 'MMM d, HH:mm' }
-              },
-              title: { display: true, text: 'Time' }
-            },
+            x: vitalsTimeAxis(),
             y: {
               title: { display: true, text: 'Heart Rate (bpm)' }
             }
@@ -3529,14 +3701,7 @@ function renderCharts() {
           animation: false,
           transitions: { active: { animation: { duration: 0 } } },
           scales: {
-            x: {
-              type: 'time',
-              time: {
-                unit: 'hour',
-                displayFormats: { hour: 'MMM d, HH:mm' }
-              },
-              title: { display: true, text: 'Time' }
-            },
+            x: vitalsTimeAxis(),
             y: {
               title: { display: true, text: 'Respiratory Rate (/min)' }
             }
@@ -3612,6 +3777,7 @@ document.querySelectorAll('.chart-filter-btn').forEach(btn => {
     
     // Update range and re-render
     currentChartRange = btn.dataset.range;
+    chartRangeChosenByUser = true;
     renderCharts();
   };
 });
