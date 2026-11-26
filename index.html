@@ -171,7 +171,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-3xl font-bold text-[#004680]">Dosed</h1>
-              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.7</span>
+              <span class="text-xs bg-[#7B68A6] text-white px-2 py-1 rounded-full">v12.8</span>
             </div>
             <p class="text-sm text-gray-600 mt-0.5">Complete child health tracking with clinical validation</p>
           </div>
@@ -180,6 +180,16 @@
           <div class="text-xs text-gray-500">Medical Grade</div>
           <div class="text-xs text-gray-400">February 2026</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Backup reminder (v12.8) -->
+    <div id="backupBanner" class="hidden mb-6 bg-amber-50 border border-amber-300 rounded-lg shadow p-4" role="status">
+      <div class="font-semibold text-amber-900 mb-1">💾 Time to back up</div>
+      <p id="backupBannerText" class="text-sm text-amber-900 mb-3"></p>
+      <div class="flex gap-2 flex-wrap">
+        <button id="btnBannerBackup" class="bg-[#004680] text-white px-4 py-2 rounded-lg text-sm hover:opacity-90">Back up now</button>
+        <button id="btnBannerSnooze" class="bg-white border border-amber-300 text-amber-900 px-4 py-2 rounded-lg text-sm hover:bg-amber-100">Remind me later</button>
       </div>
     </div>
 
@@ -296,6 +306,23 @@
         <h2 class="text-xl font-bold text-gray-800">Data Management</h2>
       </div>
       
+      <div class="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <div class="font-semibold text-gray-800">💾 Backup</div>
+          <div id="backupStatus" class="text-xs text-gray-600"></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button id="btnBackupNow" class="bg-[#004680] text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90">
+            <i data-lucide="save"></i> Back up now
+          </button>
+          <button id="btnRestoreBackup" class="bg-white border border-[#004680] text-[#004680] px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-100">
+            <i data-lucide="upload"></i> Restore from backup
+          </button>
+        </div>
+        <input id="restoreFileInput" type="file" accept=".json,application/json" class="hidden">
+        <p class="text-xs text-gray-600 mt-2">Saves everything (children, records, prescriptions and photos) to one file. Keep it in Google Drive, iCloud or email. Restoring only adds what's missing; it never overwrites or duplicates.</p>
+      </div>
+      
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button id="btnClearAllData" class="bg-red-600 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-red-700">
           <i data-lucide="trash-2"></i> Clear All Data
@@ -306,7 +333,7 @@
       </div>
       
       <div class="mt-4 text-xs text-gray-500 text-center">
-        <p>💡 Always export your data before clearing</p>
+        <p>💡 Always back up before clearing. CSV export is for reading in a spreadsheet; it can't be restored.</p>
       </div>
     </div>
   </div>
@@ -859,6 +886,7 @@ function saveData({ children, records, prescriptions }) {
   localStorage.setItem(STORAGE_KEYS.children, JSON.stringify(children));
   localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(records));
   localStorage.setItem(STORAGE_KEYS.prescriptions, JSON.stringify(prescriptions));
+  localStorage.setItem('dosed_last_change', String(Date.now())); // v12.8: for backup reminders
 }
 
 let state = loadData();
@@ -1610,6 +1638,7 @@ function quickRecordMedication(childId, medName, dose, unit) {
 
 function render() {
   renderChildren();
+  try { renderBackupStatus(); } catch (e) { /* not initialised yet during startup */ } // v12.8
   checkReminders();
   updateQuickStats(); // v12: Update stats widget
   if (typeof lucide !== 'undefined') {
@@ -4005,13 +4034,20 @@ function getImportTokenFromUrl(urlLike) {
 // Imported data comes from a link anyone could craft. Many fields are rendered
 // into the page as HTML, so strip markup characters from every string and drop
 // photos (data: URLs rendered into <img src>) entirely.
+// v12.8: a photo is kept only if it is a plain base64 image data URL (backups
+// carry photos; anything else in that field is dropped).
+const SAFE_PHOTO_RE = /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+
 function sanitizeImported(value) {
   if (typeof value === 'string') return value.replace(/[<>"'`]/g, '');
   if (Array.isArray(value)) return value.map(sanitizeImported);
   if (value && typeof value === 'object') {
     const out = {};
     for (const [k, v] of Object.entries(value)) {
-      if (k === 'photo') continue;
+      if (k === 'photo') {
+        if (typeof v === 'string' && SAFE_PHOTO_RE.test(v)) out.photo = v;
+        continue;
+      }
       out[k] = sanitizeImported(v);
     }
     return out;
@@ -4273,6 +4309,21 @@ async function importDataFromURL() {
     
     if (!confirm(message)) return;
     
+    applyImportPlan(shareData, plan, name);
+    persistAndRender();
+    
+    const total = plan.newRecords.length + plan.newPrescriptions.length;
+    alert(plan.match
+      ? `✓ Added ${total} new item${total === 1 ? '' : 's'} to ${plan.match.name}.`
+      : `✓ Imported ${name} with ${plan.newRecords.length} records.`);
+  } catch (error) {
+    console.error('Import error:', error);
+    alert('❌ Failed to import data. The share link may be invalid or corrupted.');
+  }
+}
+
+// Apply a plan from planImport(): add only the new items, never overwrite.
+function applyImportPlan(shareData, plan, name) {
     let childId;
     if (plan.match) {
       childId = plan.match.id;
@@ -4301,16 +4352,181 @@ async function importDataFromURL() {
     plan.newPrescriptions.forEach(presc => {
       state.prescriptions.push({ ...presc, id: uid(), sourceId: originId(presc), childId });
     });
-    persistAndRender();
-    
-    const total = plan.newRecords.length + plan.newPrescriptions.length;
-    alert(plan.match
-      ? `✓ Added ${total} new item${total === 1 ? '' : 's'} to ${plan.match.name}.`
-      : `✓ Imported ${name} with ${plan.newRecords.length} records.`);
-  } catch (error) {
-    console.error('Import error:', error);
-    alert('❌ Failed to import data. The share link may be invalid or corrupted.');
+    return childId;
+}
+
+/* ===========================
+   v12.8: Backup & restore
+   =========================== */
+const BACKUP_KEYS = {
+  last: 'dosed_last_backup',       // ms timestamp of last successful backup
+  changed: 'dosed_last_change',    // ms timestamp of last data change
+  snooze: 'dosed_backup_snooze'    // ms timestamp until which the reminder is hidden
+};
+const BACKUP_REMIND_DAYS = 7;
+const BACKUP_SNOOZE_DAYS = 2;
+const BACKUP_MIN_RECORDS = 5;      // don't nag a brand-new user after one reading
+
+function lsGetNum(key) {
+  try { return parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch (e) { return 0; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch (e) { /* storage unavailable */ }
+}
+
+function isBackupDue() {
+  if (state.records.length === 0 && state.children.length === 0) return false;
+  const now = Date.now();
+  if (lsGetNum(BACKUP_KEYS.snooze) > now) return false;
+  const last = lsGetNum(BACKUP_KEYS.last);
+  if (!last) return state.records.length >= BACKUP_MIN_RECORDS;
+  const changed = lsGetNum(BACKUP_KEYS.changed);
+  return changed > last && now - last > BACKUP_REMIND_DAYS * 24 * 3600 * 1000;
+}
+
+function describeAgo(ms) {
+  const days = Math.floor((Date.now() - ms) / (24 * 3600 * 1000));
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
+}
+
+function renderBackupStatus() {
+  const banner = document.getElementById('backupBanner');
+  const status = document.getElementById('backupStatus');
+  const last = lsGetNum(BACKUP_KEYS.last);
+  if (banner) {
+    const due = isBackupDue();
+    banner.classList.toggle('hidden', !due);
+    if (due) {
+      document.getElementById('backupBannerText').textContent = last
+        ? `Your last backup was ${describeAgo(last)} and you've added data since. Save a backup so nothing is lost if this phone is lost or reset.`
+        : `Your health records are stored only on this phone. Save a backup so nothing is lost if this phone is lost, reset or the browser clears its data.`;
+    }
   }
+  if (status) {
+    const changedSince = lsGetNum(BACKUP_KEYS.changed) > last;
+    status.textContent = last
+      ? `Last backup: ${describeAgo(last)} (${formatDateTime(new Date(last).toISOString())})${changedSince ? ' · new data since' : ' · up to date'}`
+      : 'Not backed up yet';
+  }
+}
+
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist && !(await navigator.storage.persisted())) {
+      await navigator.storage.persist();
+    }
+  } catch (e) { /* not supported */ }
+}
+
+async function backupNow() {
+  if (state.children.length === 0) {
+    alert('Nothing to back up yet.');
+    return;
+  }
+  let customBarcodes = [];
+  try { customBarcodes = JSON.parse(localStorage.getItem('dosed_custom_barcodes') || '[]'); } catch (e) {}
+  const backup = {
+    app: 'Dosed',
+    type: 'backup',
+    version: '12.8',
+    exportedAt: new Date().toISOString(),
+    children: state.children,
+    records: state.records,
+    prescriptions: state.prescriptions,
+    customBarcodes
+  };
+  const date = new Date().toISOString().slice(0, 10);
+  const filename = `dosed-backup-${date}.json`;
+  const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+  
+  let saved = false;
+  // On phones, the share sheet lets the user save to Files / Drive / email / WhatsApp
+  try {
+    const file = new File([blob], filename, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Dosed backup', text: `Dosed backup ${date}` });
+      saved = true;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user cancelled the share sheet
+    // otherwise fall back to download
+  }
+  if (!saved) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    saved = true;
+  }
+  lsSet(BACKUP_KEYS.last, Date.now());
+  lsSet(BACKUP_KEYS.snooze, 0);
+  requestPersistentStorage();
+  renderBackupStatus();
+  showToast(`✓ Backup saved (${filename}). Keep it somewhere safe, e.g. Google Drive, iCloud or email it to yourself.`, 'success');
+}
+
+async function restoreFromFile(file) {
+  let backup;
+  try {
+    backup = JSON.parse(await file.text());
+  } catch (e) {
+    alert('❌ That file could not be read. Please choose a Dosed backup file (dosed-backup-….json).');
+    return;
+  }
+  if (!backup || backup.app !== 'Dosed' || !Array.isArray(backup.children)) {
+    alert('❌ That file is not a Dosed backup. Please choose a file named dosed-backup-….json.');
+    return;
+  }
+  backup = sanitizeImported(backup);
+  const records = Array.isArray(backup.records) ? backup.records : [];
+  const prescriptions = Array.isArray(backup.prescriptions) ? backup.prescriptions : [];
+  const packages = backup.children
+    .filter(c => c && typeof c.name === 'string')
+    .map(child => ({
+      child,
+      records: records.filter(r => r.childId === child.id),
+      prescriptions: prescriptions.filter(p => p.childId === child.id)
+    }));
+  
+  let newChildren = 0, newRecs = 0, newPresc = 0, skipped = 0;
+  packages.forEach(pkg => {
+    const plan = planImport(pkg);
+    if (!plan.match) newChildren++;
+    newRecs += plan.newRecords.length;
+    newPresc += plan.newPrescriptions.length;
+    skipped += plan.skippedRecords + plan.skippedPrescriptions;
+  });
+  
+  const when = backup.exportedAt ? formatDateTime(backup.exportedAt) : 'unknown date';
+  if (newChildren === 0 && newRecs === 0 && newPresc === 0) {
+    alert(`✓ Everything in this backup (${when}) is already on this device. Nothing was changed.`);
+    return;
+  }
+  if (!confirm(`Restore backup from ${when}?\n\n• New children: ${newChildren}\n• New records: ${newRecs}\n• New prescriptions: ${newPresc}\n• Already on this device (skipped): ${skipped}\n\nNothing already on this device will be changed or deleted.`)) return;
+  
+  packages.forEach(pkg => {
+    const plan = planImport(pkg); // re-plan: earlier children may have been added
+    applyImportPlan(pkg, plan, pkg.child.name.replace(/\s*\(imported\)\s*$/i, ''));
+  });
+  
+  if (Array.isArray(backup.customBarcodes) && backup.customBarcodes.length) {
+    try {
+      const existing = JSON.parse(localStorage.getItem('dosed_custom_barcodes') || '[]');
+      const seen = new Set(existing.map(b => JSON.stringify(b)));
+      backup.customBarcodes.forEach(b => { if (!seen.has(JSON.stringify(b))) existing.push(b); });
+      localStorage.setItem('dosed_custom_barcodes', JSON.stringify(existing));
+    } catch (e) {}
+  }
+  
+  persistAndRender();
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  alert(`✓ Restored: ${newChildren === 1 ? '1 new child' : newChildren + ' new children'}, ${plural(newRecs, 'record')}, ${plural(newPresc, 'prescription')}.`);
 }
 
 function openImportDataModal() {
@@ -4403,6 +4619,22 @@ function openImportDataModal() {
 document.getElementById('btnAddChild').onclick = () => openChildModal('add');
 document.getElementById('btnImportData').onclick = () => openImportDataModal();
 document.getElementById('btnClearAllData').onclick = () => clearAllData();
+// v12.8: backup & restore
+document.getElementById('btnBackupNow').onclick = () => backupNow();
+document.getElementById('btnBannerBackup').onclick = () => backupNow();
+document.getElementById('btnBannerSnooze').onclick = () => {
+  lsSet(BACKUP_KEYS.snooze, Date.now() + BACKUP_SNOOZE_DAYS * 24 * 3600 * 1000);
+  renderBackupStatus();
+};
+document.getElementById('btnRestoreBackup').onclick = () => document.getElementById('restoreFileInput').click();
+document.getElementById('restoreFileInput').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) await restoreFromFile(file);
+};
+// Existing data with no change timestamp yet (pre-v12.8): treat as changed now
+if (!lsGetNum(BACKUP_KEYS.changed) && state.records.length) lsSet(BACKUP_KEYS.changed, Date.now());
+if (state.records.length) requestPersistentStorage();
 document.getElementById('btnExportAll').onclick = () => {
   if (state.children.length === 0) {
     alert('No data to export');
