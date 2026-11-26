@@ -1,0 +1,16 @@
+# TLS certificates are obtained automatically. For a practice-internal deployment
+# without a public DNS name, replace with `tls internal` or your own certificate.
+{$EPR_DOMAIN} {
+	encode gzip
+	# Optional: restrict to practice IP ranges / VPN. Uncomment and edit.
+	# @outside not remote_ip 10.0.0.0/8 192.168.0.0/16
+	# @patientlink path /v/*
+	# respond @outside 403 { not @patientlink }
+	reverse_proxy app:8000
+	log {
+		output file /data/access.log {
+			roll_size 50mb
+			roll_keep 10
+		}
+	}
+}
