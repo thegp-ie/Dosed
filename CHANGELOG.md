@@ -2,6 +2,30 @@
 
 Newest first. Older notes: `CHANGELOG_v11.md`, `CHANGELOG_v10.md`.
 
+## v12.9 — Dose suggestions follow the pack label (safety fix)
+- **Suggested doses could be higher than the pack.** The old tables picked a dose
+  from invented weight bands, not the pack's age bands. Examples: Nurofen 15 ml at
+  28 kg (pack: 10 ml for 21–30 kg); Calpol Infant 7.5 ml at 6–24 months (pack: 5 ml).
+- Suggestions now follow the pack label, by **age**:
+  - **Nurofen for Children 100mg/5ml:** copied from the Irish pack (age bands with
+    weight ranges, up to 3 times in 24 hours).
+  - **Paracetamol 120mg/5ml (Calpol Infant, Disprol):** 2–3 months (post-vaccination
+    only, over 4 kg) 2.5 ml; 3–6 months 2.5 ml; 6–24 months 5 ml; 2–4 years 7.5 ml;
+    4–6 years 10 ml. Up to 4 times in 24 hours.
+  - **Calpol Six Plus 250mg/5ml:** 6–8 years 5 ml; 8–10 years 7.5 ml; 10–12 years
+    10 ml; 12–16 years 10–15 ml.
+  - **Piriton 2mg/5ml:** 1–2 years 2.5 ml twice a day; 2–6 years 2.5 ml; 6–12 years 5 ml.
+- **Weight can only lower the suggestion, never raise it.** Where the pack gives
+  weights and the child is lighter than their age band, the lower band is shown with
+  an explanation. Below the pack's minimum weight, no dose is suggested.
+- **Warnings** appear when the saved weight is unusual for the child's age, or when
+  the pack dose is more than the mg/kg limit for the child's weight.
+- **Prescription-only medicines** (amoxicillin, Pinamox, Ventolin) no longer get a
+  suggested dose: "give the dose on the pharmacy label".
+- The suggestion box shows which child, age and weight it is for, and the pack band.
+- **Spelling:** "Diarrhoea" (existing records are updated); the page language is
+  set to British English.
+
 ## v12.8 — Backup & restore with reminders
 - **Back up now** saves everything (children, records, prescriptions, photos and
   custom barcodes) to one `dosed-backup-YYYY-MM-DD.json` file. On phones it opens

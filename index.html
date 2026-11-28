@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -378,7 +378,7 @@ const MEDICINE_BARCODES = {
 
 const COMMON_SYMPTOMS = [
   'Cough', 'Runny nose', 'Congestion', 'Sore throat', 'Earache',
-  'Headache', 'Vomiting', 'Diarrhea', 'Rash', 'Difficulty breathing',
+  'Headache', 'Vomiting', 'Diarrhoea', 'Rash', 'Difficulty breathing',
   'Wheezing', 'Lethargy', 'Poor feeding', 'Irritability', 'Seizure'
 ];
 
@@ -402,7 +402,7 @@ const VITAL_RANGES = {
   ]
 };
 
-// Pediatric weight estimates (Advanced Pediatric Life Support formulas)
+// Paediatric weight estimates (Advanced Paediatric Life Support formulas)
 const WEIGHT_ESTIMATES = {
   // Age in months -> [min expected weight kg, max expected weight kg]
   getExpectedWeight: function(ageMonths) {
@@ -714,113 +714,131 @@ const MEDICINES = [
     generic: 'paracetamol', 
     concentration: '120mg/5ml', 
     category: 'Antipyretic/Analgesic',
-    interval: 4,
-    dosageGuide: [
-      { minWeight: 4, maxWeight: 8, dose: 2.5, ageGuide: '2-3 months' },
-      { minWeight: 8, maxWeight: 10, dose: 5, ageGuide: '3-6 months' },
-      { minWeight: 10, maxWeight: 13, dose: 7.5, ageGuide: '6-24 months' },
-      { minWeight: 13, maxWeight: 15, dose: 10, ageGuide: '2-4 years' },
-      { minWeight: 15, maxWeight: 21, dose: 10, ageGuide: '4-6 years' },
-      { minWeight: 21, maxWeight: 27, dose: 15, ageGuide: '6-8 years' },
-      { minWeight: 27, maxWeight: 33, dose: 15, ageGuide: '8-10 years' },
-      { minWeight: 33, maxWeight: 43, dose: 20, ageGuide: '10-12 years' }
-    ]
+    interval: 4
   },
   { 
     name: 'Calpol Six Plus (250mg/5ml)', 
     generic: 'paracetamol', 
     concentration: '250mg/5ml', 
     category: 'Antipyretic/Analgesic',
-    interval: 4,
-    dosageGuide: [
-      { minWeight: 15, maxWeight: 21, dose: 5, ageGuide: '6-8 years' },
-      { minWeight: 21, maxWeight: 27, dose: 7.5, ageGuide: '8-10 years' },
-      { minWeight: 27, maxWeight: 43, dose: 10, ageGuide: '10-12 years' }
-    ]
+    interval: 4
   },
   { 
     name: 'Nurofen for Children (100mg/5ml)', 
     generic: 'ibuprofen', 
     concentration: '100mg/5ml', 
     category: 'Antipyretic/Analgesic',
-    interval: 6,
-    dosageGuide: [
-      { minWeight: 7, maxWeight: 9, dose: 2.5, ageGuide: '3-6 months' },
-      { minWeight: 9, maxWeight: 11, dose: 2.5, ageGuide: '6-12 months' },
-      { minWeight: 11, maxWeight: 16, dose: 5, ageGuide: '1-3 years' },
-      { minWeight: 16, maxWeight: 21, dose: 7.5, ageGuide: '4-6 years' },
-      { minWeight: 21, maxWeight: 27, dose: 10, ageGuide: '7-9 years' },
-      { minWeight: 27, maxWeight: 40, dose: 15, ageGuide: '10-12 years' }
-    ]
+    interval: 6
   },
   { 
     name: 'Amoxicillin Suspension (125mg/5ml)', 
     generic: 'amoxicillin', 
     concentration: '125mg/5ml', 
     category: 'Antibiotic',
-    interval: 8,
-    dosageGuide: [
-      { minWeight: 10, maxWeight: 15, dose: 5, ageGuide: '1-3 years' },
-      { minWeight: 15, maxWeight: 20, dose: 7.5, ageGuide: '3-6 years' },
-      { minWeight: 20, maxWeight: 30, dose: 10, ageGuide: '6-12 years' }
-    ]
+    interval: 8
   },
   { 
     name: 'Amoxicillin Suspension (250mg/5ml)', 
     generic: 'amoxicillin', 
     concentration: '250mg/5ml', 
     category: 'Antibiotic',
-    interval: 8,
-    dosageGuide: [
-      { minWeight: 20, maxWeight: 30, dose: 5, ageGuide: '6-12 years' },
-      { minWeight: 30, maxWeight: 40, dose: 7.5, ageGuide: '12+ years' }
-    ]
+    interval: 8
   },
   { 
     name: 'Ventolin Inhaler (100mcg/puff)', 
     generic: 'salbutamol', 
     category: 'Asthma - Reliever', 
     unit: 'puffs',
-    interval: 4,
-    dosageGuide: [
-      { minWeight: 0, maxWeight: 100, dose: 1, ageGuide: 'All ages', notes: '1-2 puffs as needed' }
-    ]
+    interval: 4
   },
   { 
     name: 'Piriton Syrup (2mg/5ml)', 
     generic: 'chlorphenamine', 
     concentration: '2mg/5ml', 
     category: 'Antihistamine',
-    interval: 6,
-    dosageGuide: [
-      { minWeight: 10, maxWeight: 20, dose: 2.5, ageGuide: '1-2 years' },
-      { minWeight: 20, maxWeight: 30, dose: 2.5, ageGuide: '2-6 years' },
-      { minWeight: 30, maxWeight: 45, dose: 5, ageGuide: '6-12 years' }
-    ]
+    interval: 6
   },
   { 
     name: 'Pinamox Suspension', 
     generic: 'amoxicillin', 
     concentration: '125mg/5ml', 
     category: 'Antibiotic',
-    interval: 8,
-    dosageGuide: [
-      { minWeight: 10, maxWeight: 20, dose: 5, ageGuide: '1-6 years' },
-      { minWeight: 20, maxWeight: 30, dose: 10, ageGuide: '6-12 years' }
-    ]
+    interval: 8
   },
   { 
     name: 'Disprol (120mg/5ml)', 
     generic: 'paracetamol', 
     concentration: '120mg/5ml', 
     category: 'Antipyretic/Analgesic',
-    interval: 4,
-    dosageGuide: [
-      { minWeight: 8, maxWeight: 13, dose: 5, ageGuide: '3-12 months' },
-      { minWeight: 13, maxWeight: 21, dose: 10, ageGuide: '1-6 years' }
-    ]
+    interval: 4
   }
 ];
+
+/* v12.9: Suggested doses now follow the PACK LABEL, which doses by AGE.
+   The old tables used invented weight bands and suggested more than the pack
+   for some children (e.g. Calpol Infant 7.5 ml at 6–24 months; pack says 5 ml).
+   - Nurofen bands are copied from the Irish pack (age with weight ranges).
+   - Paracetamol 120mg/5ml, Calpol Six Plus and Piriton use the standard
+     UK/Ireland label age bands.
+   - If the child's weight falls in a LOWER pack band than their age, the lower
+     dose is suggested. A weight in a higher band never raises the dose.
+   - Prescription-only medicines get no suggestion: use the pharmacy label.
+   Age bands: minAgeM inclusive, maxAgeM exclusive (months). */
+const PARACETAMOL_120_LABEL = {
+  source: 'Pack label (paracetamol 120mg/5ml)',
+  frequency: 'Up to 4 times in 24 hours, at least 4 hours apart',
+  tooOld: 'Over 6 years: use a 6+ paracetamol (250mg/5ml), e.g. Calpol Six Plus.',
+  bands: [
+    { minAgeM: 2, maxAgeM: 3, dose: 2.5, ageLabel: '2–3 months', minWeight: 4, caution:
+      'Only for fever after vaccination, if born after 37 weeks and over 4 kg. A second dose may be given after 4–6 hours; speak to a doctor or pharmacist if more is needed.' },
+    { minAgeM: 3, maxAgeM: 6, dose: 2.5, ageLabel: '3–6 months' },
+    { minAgeM: 6, maxAgeM: 24, dose: 5, ageLabel: '6–24 months' },
+    { minAgeM: 24, maxAgeM: 48, dose: 7.5, ageLabel: '2–4 years' },
+    { minAgeM: 48, maxAgeM: 72, dose: 10, ageLabel: '4–6 years' }
+  ]
+};
+const PACK_DOSING = {
+  'Calpol Infant (120mg/5ml)': PARACETAMOL_120_LABEL,
+  'Disprol (120mg/5ml)': PARACETAMOL_120_LABEL,
+  'Calpol Six Plus (250mg/5ml)': {
+    source: 'Pack label (paracetamol 250mg/5ml)',
+    frequency: 'Up to 4 times in 24 hours, at least 4 hours apart',
+    tooYoung: 'Under 6 years: use an infant paracetamol (120mg/5ml), e.g. Calpol Infant.',
+    bands: [
+      { minAgeM: 72, maxAgeM: 96, dose: 5, ageLabel: '6–8 years' },
+      { minAgeM: 96, maxAgeM: 120, dose: 7.5, ageLabel: '8–10 years' },
+      { minAgeM: 120, maxAgeM: 144, dose: 10, ageLabel: '10–12 years' },
+      { minAgeM: 144, maxAgeM: 192, dose: 10, ageLabel: '12–16 years', caution: 'Pack allows 10–15 ml at this age.' }
+    ]
+  },
+  'Nurofen for Children (100mg/5ml)': {
+    source: 'Pack label (Nurofen for Children 100mg/5ml)',
+    frequency: 'Up to 3 times in 24 hours (about every 6–8 hours)',
+    tooYoung: 'Not for babies under 3 months unless a doctor advises it.',
+    bands: [
+      { minAgeM: 3, maxAgeM: 6, dose: 2.5, ageLabel: '3–6 months', minWeight: 5, weightLabel: 'over 5 kg', caution:
+        'For babies aged 3–5 months, get medical advice if symptoms worsen, or within 24 hours if they persist.' },
+      { minAgeM: 6, maxAgeM: 12, dose: 2.5, ageLabel: '6–12 months', minWeight: 7.7, weightLabel: '7.7–9 kg' },
+      { minAgeM: 12, maxAgeM: 48, dose: 5, ageLabel: '1–3 years', minWeight: 10, weightLabel: '10–16 kg' },
+      { minAgeM: 48, maxAgeM: 84, dose: 7.5, ageLabel: '4–6 years', minWeight: 17, weightLabel: '17–20 kg' },
+      { minAgeM: 84, maxAgeM: 120, dose: 10, ageLabel: '7–9 years', minWeight: 21, weightLabel: '21–30 kg' },
+      { minAgeM: 120, maxAgeM: 156, dose: 15, ageLabel: '10–12 years', minWeight: 31, weightLabel: '31–40 kg' }
+    ]
+  },
+  'Piriton Syrup (2mg/5ml)': {
+    source: 'Pack label (chlorphenamine 2mg/5ml)',
+    tooYoung: 'Not for children under 1 year.',
+    bands: [
+      { minAgeM: 12, maxAgeM: 24, dose: 2.5, ageLabel: '1–2 years', frequency: 'Twice a day' },
+      { minAgeM: 24, maxAgeM: 72, dose: 2.5, ageLabel: '2–6 years', frequency: 'Every 4–6 hours, up to 6 times in 24 hours' },
+      { minAgeM: 72, maxAgeM: 144, dose: 5, ageLabel: '6–12 years', frequency: 'Every 4–6 hours, up to 6 times in 24 hours' }
+    ]
+  }
+};
+const PRESCRIPTION_ONLY = new Set([
+  'Amoxicillin Suspension (125mg/5ml)', 'Amoxicillin Suspension (250mg/5ml)',
+  'Pinamox Suspension', 'Ventolin Inhaler (100mcg/puff)'
+]);
 
 /* ===========================
    Icon Fallback System
@@ -871,7 +889,7 @@ if (typeof lucide === 'undefined') {
 
 /* Release info: update these two lines (only) for each release.
    The header badge and date are filled in from here. */
-const APP_VERSION = '12.8';
+const APP_VERSION = '12.9';
 const APP_RELEASE_DATE = 'November 2026';
 
 const STORAGE_KEYS = {
@@ -895,6 +913,18 @@ function saveData({ children, records, prescriptions }) {
 }
 
 let state = loadData();
+
+// v12.9: UK/Irish spelling for symptoms saved by earlier versions
+(function migrateSymptomSpelling() {
+  let changed = false;
+  state.records.forEach(r => {
+    if (Array.isArray(r.symptoms) && r.symptoms.includes('Diarrhea')) {
+      r.symptoms = r.symptoms.map(x => x === 'Diarrhea' ? 'Diarrhoea' : x);
+      changed = true;
+    }
+  });
+  if (changed) saveData(state);
+})();
 
 // v12.2 migration: infer weightUpdatedAt for existing children from their
 // most recent record that included a weight. Runs once; harmless if repeated.
@@ -1042,21 +1072,101 @@ function calculateNextDoseISO(frequency) {
   return now.toISOString();
 }
 
-function getRecommendedDose(medName, weight) {
-  const med = MEDICINES.find(m => m.name === medName);
-  if (!med || !weight || !med.dosageGuide) return null;
+// v12.9: Suggested dose from the pack label for this child (see PACK_DOSING).
+// Returns { status: 'ok' | 'rx' | 'none', ... } so the UI can always explain itself.
+function getRecommendedDose(medName, child) {
+  const med = getMedicineByName(medName);
+  if (!med) return null;
+  if (PRESCRIPTION_ONLY.has(medName)) {
+    return { status: 'rx', message: 'Prescription medicine: give the dose on the pharmacy label.' };
+  }
+  const label = PACK_DOSING[medName];
+  if (!label) return null;
+  const unit = med.unit || 'ml';
+  const ageM = getChildAgeMonths(child);
+  const w = parseFloat(child && child.weight);
   
-  const w = parseFloat(weight);
-  const guide = med.dosageGuide.find(g => w >= g.minWeight && w <= g.maxWeight);
-  if (!guide) return null;
+  if (ageM === null) {
+    return { status: 'none', message: "Add this child's date of birth to see the pack dose." };
+  }
+  const first = label.bands[0], last = label.bands[label.bands.length - 1];
+  let band = label.bands.find(b => ageM >= b.minAgeM && ageM < b.maxAgeM);
+  if (!band) {
+    return { status: 'none', message: ageM < first.minAgeM
+      ? (label.tooYoung || 'Not recommended at this age on the pack. Ask your GP or pharmacist.')
+      : (label.tooOld || 'Outside the ages on the pack. Check the leaflet or ask your pharmacist.') };
+  }
+  
+  const notes = [];
+  const warnings = [];
+  const ageBand = band;
+  
+  // A band's own minimum weight (e.g. paracetamol at 2–3 months: over 4 kg)
+  const packHasWeightBands = label.bands.every(b => b.minWeight);
+  if (w > 0 && !packHasWeightBands && band.minWeight && w < band.minWeight) {
+    return { status: 'none', message: `${w} kg is below the pack's minimum for ${band.ageLabel} (${band.minWeight} kg). Ask your GP or pharmacist.` };
+  }
+  
+  // Weight cross-check (only where the pack gives a weight range for every age band)
+  if (w > 0 && packHasWeightBands) {
+    if (first.minWeight && w < first.minWeight) {
+      return { status: 'none', message: `${w} kg is below the pack's minimum (${first.minWeight} kg). Ask your GP or pharmacist.` };
+    }
+    const weightBand = label.bands.filter(b => b.minWeight && w >= b.minWeight).pop();
+    if (weightBand && weightBand.dose < band.dose) {
+      band = weightBand;
+      notes.push(`The pack dose for ${ageBand.ageLabel} is ${ageBand.dose} ${unit}, but ${w} kg is in the ${weightBand.weightLabel || weightBand.ageLabel} band, so the lower dose is shown.`);
+    }
+  }
+  
+  // Is the saved weight plausible for the age? A wrong weight also skews the 24h limits.
+  if (w > 0 && typeof validateWeight === 'function') {
+    const wv = validateWeight(w, ageM);
+    if (wv && wv.severity && wv.severity !== 'normal') {
+      warnings.push(`${child.name}'s saved weight (${w} kg) is unusual for ${formatAge(child)}: ${wv.message.replace(/^⚠️\s*/, '')}. Check it's correct.`);
+    }
+  }
+  
+  // mg/kg sanity check
+  const g = med.generic && med.generic.toLowerCase();
+  const mgPerMl = parseConcentration(med.concentration);
+  if (w > 0 && g && INGREDIENT_LIMITS[g] && mgPerMl) {
+    const mg = band.dose * mgPerMl;
+    const maxMg = INGREDIENT_LIMITS[g].mgPerKgPerDose * w;
+    if (mg > maxMg + 0.5) {
+      warnings.push(`${band.dose} ${unit} is ${Math.round(mg)} mg, more than ${INGREDIENT_LIMITS[g].mgPerKgPerDose} mg/kg for ${w} kg (${Math.round(maxMg)} mg). Ask your pharmacist or GP.`);
+    }
+  }
+  if (band.caution) notes.push(band.caution);
   
   return {
-    dose: guide.dose,
-    ageGuide: guide.ageGuide,
-    unit: med.unit || 'ml',
-    notes: guide.notes,
+    status: 'ok',
+    dose: band.dose,
+    unit,
+    ageLabel: ageBand.ageLabel,
+    weightLabel: ageBand.weightLabel,
+    frequency: band.frequency || label.frequency || '',
+    source: label.source,
+    notes, warnings,
     interval: med.interval || 4
   };
+}
+
+// v12.9: Shared HTML for the suggested-dose box (record and prescription forms)
+function renderDoseSuggestionHTML(rec, child, buttonId) {
+  const who = `For ${escapeHtml(child.name)} · ${escapeHtml(formatAge(child))}${child.weight ? ` · ${escapeHtml(String(child.weight))} kg` : ''}`;
+  if (rec.status !== 'ok') {
+    return `<div class="text-xs text-gray-600 mb-1">${who}</div>
+      <div class="text-sm font-normal text-gray-800">${escapeHtml(rec.message)}</div>`;
+  }
+  return `
+    <div class="text-xs text-gray-600 mb-1">${who}</div>
+    <div>${rec.dose} ${rec.unit} <span class="font-normal">(pack: ${escapeHtml(rec.ageLabel)}${rec.weightLabel ? `, ${escapeHtml(rec.weightLabel)}` : ''})</span></div>
+    ${rec.frequency ? `<div class="text-sm mt-1">${escapeHtml(rec.frequency)}</div>` : ''}
+    ${rec.notes.map(n => `<div class="text-xs mt-1 text-gray-700 font-normal">ℹ️ ${escapeHtml(n)}</div>`).join('')}
+    ${rec.warnings.map(n => `<div class="text-xs mt-1 text-red-700 font-semibold">⚠️ ${escapeHtml(n)}</div>`).join('')}
+    <div class="text-xs mt-1 text-gray-500 font-normal">Always check the dose on your pack. ${escapeHtml(rec.source)}.</div>
+    <button id="${buttonId}" class="mt-2 bg-[#004680] text-white px-3 py-1 rounded text-sm">Use This Dose</button>`;
 }
 
 /* ===========================
@@ -2647,7 +2757,7 @@ function openRecordModal(childId) {
       </div>
       
       <div id="doseRecommendation" class="hidden bg-blue-50 p-3 rounded">
-        <div class="text-sm font-medium mb-1">Recommended Dose:</div>
+        <div class="text-sm font-medium mb-1">Suggested dose (from pack label):</div>
         <div id="doseText" class="text-blue-900 font-semibold"></div>
       </div>
       
@@ -2822,22 +2932,18 @@ function openRecordModal(childId) {
   document.getElementById('rec_med').onchange = (e) => {
     const medName = e.target.value;
     runDoseValidation(); // v12.2: refresh 24h meter/validation on medication change
-    if (!medName || !child.weight) {
+    if (!medName) {
       document.getElementById('doseRecommendation').classList.add('hidden');
       return;
     }
     
-    const rec = getRecommendedDose(medName, child.weight);
+    const rec = getRecommendedDose(medName, child);
     if (rec) {
-      document.getElementById('doseText').innerHTML = `
-        <div>${rec.dose} ${rec.unit} (${rec.ageGuide})</div>
-        <div class="text-sm mt-1">Give every ${rec.interval} hours</div>
-        ${rec.notes ? `<div class="text-xs mt-1 text-gray-600">${rec.notes}</div>` : ''}
-        <button id="useDose" class="mt-2 bg-[#004680] text-white px-3 py-1 rounded text-sm">Use This Dose</button>
-      `;
+      document.getElementById('doseText').innerHTML = renderDoseSuggestionHTML(rec, child, 'useDose');
       document.getElementById('doseRecommendation').classList.remove('hidden');
       
-      document.getElementById('useDose').onclick = () => {
+      const useBtn = document.getElementById('useDose');
+      if (useBtn) useBtn.onclick = () => {
         document.getElementById('rec_dose').value = rec.dose;
         document.getElementById('rec_unit').value = rec.unit;
         // Trigger dose validation
@@ -3115,7 +3221,7 @@ function openPrescriptionModal(childId) {
       </div>
       
       <div id="prescDoseRec" class="hidden bg-blue-50 p-3 rounded">
-        <div class="text-sm font-medium mb-1">Recommended Dose:</div>
+        <div class="text-sm font-medium mb-1">Suggested dose (from pack label):</div>
         <div id="prescDoseText" class="text-blue-900 font-semibold"></div>
       </div>
       
@@ -3169,20 +3275,18 @@ function openPrescriptionModal(childId) {
   // Dose recommendation
   document.getElementById('presc_med').onchange = (e) => {
     const medName = e.target.value;
-    if (!medName || !child.weight) {
+    if (!medName) {
       document.getElementById('prescDoseRec').classList.add('hidden');
       return;
     }
     
-    const rec = getRecommendedDose(medName, child.weight);
+    const rec = getRecommendedDose(medName, child);
     if (rec) {
-      document.getElementById('prescDoseText').innerHTML = `
-        <div>${rec.dose} ${rec.unit} (${rec.ageGuide})</div>
-        <button id="usePrescDose" class="mt-2 bg-[#004680] text-white px-3 py-1 rounded text-sm">Use This Dose</button>
-      `;
+      document.getElementById('prescDoseText').innerHTML = renderDoseSuggestionHTML(rec, child, 'usePrescDose');
       document.getElementById('prescDoseRec').classList.remove('hidden');
       
-      document.getElementById('usePrescDose').onclick = () => {
+      const useBtn = document.getElementById('usePrescDose');
+      if (useBtn) useBtn.onclick = () => {
         document.getElementById('presc_dose').value = rec.dose;
         document.getElementById('presc_unit').value = rec.unit;
       };
