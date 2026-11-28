@@ -364,17 +364,7 @@
    Medicine Database
    =========================== */
 
-// Common Irish medicine barcodes (EAN-13)
-const MEDICINE_BARCODES = {
-  '5000347005916': 'Calpol Infant (120mg/5ml)',
-  '5000347006012': 'Calpol Six Plus (250mg/5ml)',
-  '5000347006241': 'Calpol Infant Suspension Sugar Free',
-  '5000347009747': 'Nurofen for Children (100mg/5ml)',
-  '5000347009754': 'Nurofen for Children Orange',
-  '5000347009761': 'Nurofen for Children Strawberry',
-  '5391516691819': 'Pinamox Suspension',
-  // Add more as needed - users can also add custom entries
-};
+// Medicine barcodes: see VERIFIED_BARCODES and the learned codes in the scanner section (v12.10).
 
 const COMMON_SYMPTOMS = [
   'Cough', 'Runny nose', 'Congestion', 'Sore throat', 'Earache',
@@ -889,7 +879,7 @@ if (typeof lucide === 'undefined') {
 
 /* Release info: update these two lines (only) for each release.
    The header badge and date are filled in from here. */
-const APP_VERSION = '12.9';
+const APP_VERSION = '12.10';
 const APP_RELEASE_DATE = 'November 2026';
 
 const STORAGE_KEYS = {
@@ -3925,48 +3915,52 @@ document.querySelectorAll('.chart-filter-btn').forEach(btn => {
    Barcode Scanner
    =========================== */
 
+/* v12.10: Barcode scanner, rewritten.
+   - One implementation shared by the record and prescription forms (the
+     prescription form called a function that didn't exist, which also stopped
+     its Save button working).
+   - Scanning stops after the first read (it used to keep beeping and saving
+     the same code every half second).
+   - Learns bottles: if a barcode isn't known, the user picks the medicine
+     once and the app remembers it (stored in dosed_custom_barcodes, which is
+     included in backups).
+   - Built-in codes are only ones verified from a real pack. */
+const VERIFIED_BARCODES = {
+  '5000158069848': 'Nurofen for Children (100mg/5ml)' // Nurofen for Children Strawberry 200 ml (scanned from pack)
+};
+const ZXING_URL = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+
 let barcodeStream = null;
 let barcodeDetectionInterval = null;
+let zxingReader = null;
 
-function initBarcodeScanner() {
-  const scanBtn = document.getElementById('btnScanBarcode');
-  const scanModal = document.getElementById('barcodeScannerModal');
-  const closeBtn = document.getElementById('closeBarcodeScanner');
-  const video = document.getElementById('barcodeVideo');
-  
-  if (!scanBtn) return;
-  
-  scanBtn.onclick = async () => {
-    scanModal.classList.remove('hidden');
-    document.getElementById('barcodeResult').classList.add('hidden');
-    
-    try {
-      barcodeStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } // Use back camera on mobile
-      });
-      video.srcObject = barcodeStream;
-      video.play();
-      
-      // Start scanning
-      startBarcodeDetection(video);
-    } catch (err) {
-      alert('Camera access denied or not available. Please allow camera access to scan barcodes.');
-      scanModal.classList.add('hidden');
-    }
-  };
-  
-  closeBtn.onclick = () => {
-    stopBarcodeScanning();
-    scanModal.classList.add('hidden');
-  };
-  
-  // Close on clicking outside
-  scanModal.onclick = (e) => {
-    if (e.target === scanModal) {
-      stopBarcodeScanning();
-      scanModal.classList.add('hidden');
-    }
-  };
+function getLearnedBarcodes() {
+  try { return JSON.parse(localStorage.getItem('dosed_custom_barcodes') || '[]'); } catch (e) { return []; }
+}
+
+function lookupBarcode(code) {
+  const learned = getLearnedBarcodes().filter(b => b && b.barcode === code && b.medication);
+  if (learned.length) return learned[learned.length - 1].medication;
+  return VERIFIED_BARCODES[code] || null;
+}
+
+function rememberBarcode(code, medication) {
+  const list = getLearnedBarcodes().filter(b => b && b.barcode !== code && b.medication); // drop old unlinked scans
+  list.push({ barcode: code, medication, timestamp: new Date().toISOString() });
+  try { localStorage.setItem('dosed_custom_barcodes', JSON.stringify(list)); } catch (e) {}
+}
+
+function scanFeedback() {
+  try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx(); const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.frequency.value = 880; gain.gain.value = 0.08;
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.12);
+    osc.onended = () => ctx.close();
+  } catch (e) {}
 }
 
 function stopBarcodeScanning() {
@@ -3978,103 +3972,131 @@ function stopBarcodeScanning() {
     clearInterval(barcodeDetectionInterval);
     barcodeDetectionInterval = null;
   }
+  if (zxingReader) {
+    try { zxingReader.reset(); } catch (e) {}
+    zxingReader = null;
+  }
 }
 
-function startBarcodeDetection(video) {
-  // Try using BarcodeDetector API if available (Chrome/Edge on Android)
+function startBarcodeDetection(video, onCode) {
+  let done = false;
+  const found = (code) => {
+    if (done || !code) return;
+    done = true;
+    stopBarcodeScanning();
+    onCode(String(code));
+  };
+  // Native detector (Chrome on Android)
   if ('BarcodeDetector' in window) {
-    const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-    
+    const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
     barcodeDetectionInterval = setInterval(async () => {
       try {
-        const barcodes = await barcodeDetector.detect(video);
-        if (barcodes.length > 0) {
-          handleBarcodeDetected(barcodes[0].rawValue);
-        }
-      } catch (err) {
-        // Continue scanning
-      }
-    }, 500);
-  } else {
-    // Fallback: Use ZXing library via CDN
-    loadZXingAndScan(video);
+        const codes = await detector.detect(video);
+        if (codes.length > 0) found(codes[0].rawValue);
+      } catch (err) { /* keep scanning */ }
+    }, 400);
+    return;
   }
-}
-
-function loadZXingAndScan(video) {
-  // Load ZXing library dynamically
-  if (!window.ZXing) {
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js';
-    script.onload = () => startZXingScanning(video);
-    document.head.appendChild(script);
-  } else {
-    startZXingScanning(video);
-  }
-}
-
-function startZXingScanning(video) {
-  const codeReader = new ZXing.BrowserMultiFormatReader();
-  
-  codeReader.decodeFromVideoDevice(null, video, (result, err) => {
-    if (result) {
-      handleBarcodeDetected(result.text);
-      codeReader.reset();
+  // Fallback (e.g. iPhone): ZXing, pinned version, loaded on demand
+  const run = () => {
+    try {
+      zxingReader = new ZXing.BrowserMultiFormatReader();
+      zxingReader.decodeFromVideoElementContinuously(video, (result) => {
+        if (result) found(result.getText ? result.getText() : result.text);
+      });
+    } catch (e) {
+      console.error('ZXing failed:', e);
     }
-  });
-  
-  // Store for cleanup
-  barcodeDetectionInterval = { reader: codeReader };
+  };
+  if (window.ZXing) return run();
+  const script = document.createElement('script');
+  script.src = ZXING_URL;
+  script.onload = run;
+  script.onerror = () => alert('Barcode scanning needs an internet connection the first time on this device. Please select the medicine manually.');
+  document.head.appendChild(script);
 }
 
-function handleBarcodeDetected(barcode) {
-  console.log('Barcode detected:', barcode);
+// Wire up a scan button + scanner overlay to a medication <select>
+function initBarcodeScannerForElement(btnId, modalId, closeId, videoId, resultId, valueId, matchId, selectId) {
+  const scanBtn = document.getElementById(btnId);
+  const scanModal = document.getElementById(modalId);
+  const closeBtn = document.getElementById(closeId);
+  const video = document.getElementById(videoId);
+  const resultBox = document.getElementById(resultId);
+  const valueEl = document.getElementById(valueId);
+  const matchEl = document.getElementById(matchId);
+  const select = document.getElementById(selectId);
+  if (!scanBtn || !scanModal || !video || !select) return;
   
-  // Show result
-  document.getElementById('barcodeValue').textContent = barcode;
-  document.getElementById('barcodeResult').classList.remove('hidden');
+  const close = () => {
+    stopBarcodeScanning();
+    scanModal.classList.add('hidden');
+  };
+  const chooseMedicine = (name) => {
+    select.value = name;
+    select.dispatchEvent(new Event('change'));
+  };
   
-  // Check if we have this medicine in our database
-  const medicineName = MEDICINE_BARCODES[barcode];
-  const matchDiv = document.getElementById('medicineMatch');
-  
-  if (medicineName) {
-    matchDiv.innerHTML = `✓ Matched: <strong>${medicineName}</strong>`;
-    
-    // Auto-select in dropdown
-    const select = document.getElementById('rec_med');
-    if (select) {
-      select.value = medicineName;
-      select.dispatchEvent(new Event('change'));
+  const onCode = (code) => {
+    scanFeedback();
+    valueEl.textContent = code;
+    resultBox.classList.remove('hidden');
+    const known = lookupBarcode(code);
+    if (known && Array.from(select.options).some(o => o.value === known)) {
+      matchEl.innerHTML = `✓ Matched: <strong>${escapeHtml(known)}</strong>`;
+      chooseMedicine(known);
+      setTimeout(close, 1200);
+      return;
     }
-    
-    // Close scanner after 1.5 seconds
-    setTimeout(() => {
-      stopBarcodeScanning();
-      document.getElementById('barcodeScannerModal').classList.add('hidden');
-    }, 1500);
-  } else {
-    matchDiv.innerHTML = `Medicine not found in database. You can still select manually.<br><small class="text-xs">Barcode: ${barcode}</small>`;
-    
-    // Store barcode for potential future matching
-    const customBarcode = {
-      barcode: barcode,
-      timestamp: new Date().toISOString()
+    // Unknown: ask once, then remember
+    const options = Array.from(select.options)
+      .filter(o => o.value)
+      .map(o => `<option value="${escapeAttr(o.value)}">${escapeHtml(o.textContent)}</option>`).join('');
+    matchEl.innerHTML = `
+      <div class="text-gray-800 mb-2">New bottle. Which medicine is this? Dosed will remember it next time.</div>
+      <select id="${modalId}_learnSelect" class="w-full border rounded px-2 py-2 text-sm mb-2">
+        <option value="">Choose medicine…</option>${options}
+      </select>
+      <div class="flex gap-2">
+        <button type="button" id="${modalId}_learnSave" class="flex-1 bg-[#004680] text-white px-3 py-2 rounded text-sm">Save &amp; use</button>
+        <button type="button" id="${modalId}_rescan" class="flex-1 bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm">Scan again</button>
+      </div>`;
+    document.getElementById(`${modalId}_learnSave`).onclick = () => {
+      const name = document.getElementById(`${modalId}_learnSelect`).value;
+      if (!name) return;
+      rememberBarcode(code, name);
+      chooseMedicine(name);
+      close();
+      showToast(`✓ Saved: this barcode is ${name}`, 'success');
     };
-    const customBarcodes = JSON.parse(localStorage.getItem('dosed_custom_barcodes') || '[]');
-    customBarcodes.push(customBarcode);
-    localStorage.setItem('dosed_custom_barcodes', JSON.stringify(customBarcodes));
-    
-    // Don't auto-close so user can manually select
-  }
+    document.getElementById(`${modalId}_rescan`).onclick = () => startScan();
+  };
   
-  // Play success sound (optional)
-  try {
-    const audio = new Audio('data:audio/wav;base64,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');
-    audio.play().catch(() => {});
-  } catch (err) {
-    // Ignore audio errors
-  }
+  const startScan = async () => {
+    stopBarcodeScanning();
+    scanModal.classList.remove('hidden');
+    resultBox.classList.add('hidden');
+    matchEl.innerHTML = '';
+    try {
+      barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = barcodeStream;
+      video.setAttribute('playsinline', '');
+      video.play().catch(() => {}); // don't wait: detection retries until frames arrive
+      startBarcodeDetection(video, onCode);
+    } catch (err) {
+      alert('Camera access denied or not available. Please allow camera access to scan barcodes.');
+      close();
+    }
+  };
+  
+  scanBtn.onclick = startScan;
+  if (closeBtn) closeBtn.onclick = close;
+  scanModal.onclick = (e) => { if (e.target === scanModal) close(); };
+}
+
+function initBarcodeScanner() {
+  initBarcodeScannerForElement('btnScanBarcode', 'barcodeScannerModal', 'closeBarcodeScanner', 'barcodeVideo',
+    'barcodeResult', 'barcodeValue', 'medicineMatch', 'rec_med');
 }
 
 /* ===========================

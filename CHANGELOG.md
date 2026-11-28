@@ -2,6 +2,22 @@
 
 Newest first. Older notes: `CHANGELOG_v11.md`, `CHANGELOG_v10.md`.
 
+## v12.10 — Barcode scanner fixed and learns bottles; prescriptions save again
+- **Adding a prescription was broken.** The prescription form called a scanner
+  function that didn't exist, which stopped the form's Save button from working.
+  This was a long-standing bug.
+- **The barcode list was not real.** The built-in codes were invented: Calpol and
+  Nurofen were listed under the same manufacturer prefix, and some names didn't match
+  any medicine in the list. They have been removed. The only built-in code is
+  Nurofen for Children Strawberry 200 ml (5000158069848), taken from a real scan.
+- **Learns bottles.** When a barcode isn't recognised, the scanner asks "Which
+  medicine is this?" once and remembers the answer, so the next scan selects it
+  automatically. Learned codes are included in backups.
+- **Scanning stops after the first read.** It used to keep beeping and saving the
+  same code every half second.
+- One scanner is now shared by the record and prescription forms. The fallback
+  scanner for iPhones is pinned to a fixed version (@zxing/library 0.21.3).
+
 ## v12.9 — Dose suggestions follow the pack label (safety fix)
 - **Suggested doses could be higher than the pack.** The old tables picked a dose
   from invented weight bands, not the pack's age bands. Examples: Nurofen 15 ml at
